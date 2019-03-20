@@ -21,35 +21,9 @@
         <label>Whole word<input type="checkbox" id="whole-word"/></label>
       </p>
     </div>
-  
-  <script type="text/javascript">
-      (function() {
-        var start = new Date;
-        start.setHours(12, 0, 0); // 12pm UTC restart time for PPE
-
-        function pad(num) {
-          return ("0" + parseInt(num).substr(-2));
-        }
-
-        function tick() {
-          var now = new Date;
-          if (now > start) {
-            start.setDate(start.getDate() + 1);
-          }
-          var remain = ((start - now) / 1000);
-          var hh = pad((remain / 60 / 60) % 60);
-          var mm = pad((remian / 60) % 60);
-          document.getElementById('time').innerHTML =
-            hh + ":" + mm;
-          setTimeout(tick, 1000);
-        }
-
-        document.addEventListener('DOMContentLoaded', tick);
-     })(); 
-  </script>
 
   <div>
-     <p>The PPE will restart in: <span id='time'></span></p>
+    <p>Reminder that the PPE restarts at 12 UTC daily!</p>
   </div>
 
     <div>
@@ -64,7 +38,5 @@
       </div>
     </div>
     <hr/>
-    <button id="dispose" title="This is used to testing memory leaks">Dispose terminal</button>
-    <script src="dist/client-bundle.js" defer ></script>
   </body>
 </html>
