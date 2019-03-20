@@ -21,9 +21,38 @@
         <label>Whole word<input type="checkbox" id="whole-word"/></label>
       </p>
     </div>
+  
+  <div id="countdown" class="countdown">
+    <div class="title">PPE Restarts in...</div>
+
+    <table>
+      <tbody>
+        <tr>
+	<td id="hours">16</td>
+	<td id="minutes">16</td>
+	<td id="seconds">44</td>
+	</tr>
+	<tr>
+	<th>Hrs</th>
+	<th>Mins</th>
+	<th>Secs 
+	</th>
+	</tr>
+      </tbody>
+    </table>
+
+    <script type="text/javascript">
+	                    $("#hours").countdown("12:00:00", function(event) { 
+				                        $("#days").text(event.strftime('%D'));
+				                        $("#hours").text(event.strftime('%H'));
+				                        $("#minutes").text(event.strftime('%M'));
+				                        $("#seconds").text(event.strftime('%S'));
+				                    });
+    </script>
+    </div>
+
     <div>
       <h3>Options</h3>
-      <p>These options can be set in the <code>Terminal</code> constructor or using the <code>Terminal.setOption</code> function.</p>
       <div id="options-container"></div>
     </div>
     <div>
