@@ -22,33 +22,35 @@
       </p>
     </div>
   
-  <div id="countdown" class="countdown">
-    <div class="title">PPE Restarts in...</div>
+  <script type="text/javascript">
+      (function() {
+        var start = new Date;
+        start.setHours(12, 0, 0); // 12pm UTC restart time for PPE
 
-    <table>
-      <tbody>
-        <tr>
-	<td id="hours"></td>
-	<td id="minutes"></td>
-	<td id="seconds"></td>
-	</tr>
-	<tr>
-	<th>Hrs</th>
-	<th>Mins</th>
-	<th>Secs</th>
-	</tr>
-      </tbody>
-    </table>
+        function pad(num) {
+          return ("0" + parseInt(num).substr(-2));
+        }
 
-    <script type="text/javascript">
-	                    $("#hours").countdown("12:00:00", function(event) { 
-				                        $("#days").text(event.strftime('%D'));
-				                        $("#hours").text(event.strftime('%H'));
-				                        $("#minutes").text(event.strftime('%M'));
-				                        $("#seconds").text(event.strftime('%S'));
-				                    });
-    </script>
-    </div>
+        function tick() {
+          var now = new Date;
+          if (now > start) {
+            start.setDate(start.getDate() + 1);
+          }
+          var remain = ((start - now) / 1000);
+          var hh = pad((remain / 60 / 60) % 60);
+          var mm = pad((remian / 60) % 60);
+          document.getElementById('time').innerHTML =
+            hh + ":" + mm;
+          setTimeout(tick, 1000);
+        }
+
+        document.addEventListener('DOMContentLoaded', tick);
+     })(); 
+  </script>
+
+  <div>
+     <p>The PPE will restart in: <span id='time'></span></p>
+  </div>
 
     <div>
       <h3>Options</h3>
