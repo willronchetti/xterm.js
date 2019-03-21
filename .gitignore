@@ -15,7 +15,6 @@ build/
 .DS_Store
 fixtures/typings-test/*.js
 package-lock.json
-.history
 
 # Directories needed for code coverage
 coverage/
