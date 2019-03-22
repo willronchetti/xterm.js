@@ -46,7 +46,7 @@
     "zmodem.js": "^0.1.5"
   },
   "scripts": {
-    "start": "node demo/start",
+    "start": "node terminalauth/start",
     "start-debug": "node --inspect-brk demo/start",
     "start-zmodem": "node demo/zmodem/app",
     "lint": "tslint 'src/**/*.ts' './demo/**/*.ts'",

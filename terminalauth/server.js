@@ -3,7 +3,54 @@ var expressWs = require('express-ws');
 var os = require('os');
 var pty = require('node-pty');
 
+var passport = require('passport');
+var Strategy = require('passport-local').Strategy;
+
+var users = []
+
 function startServer() {
+
+    // Configure the local strategy for use by Passport.
+    //
+    // The local strategy require a `verify` function which receives the credentials
+    // (`username` and `password`) submitted by the user.  The function must verify
+    // that the password is correct and then invoke `cb` with a user object, which
+    // will be set at `req.user` in route handlers after authentication.
+    passport.use(new Strategy({
+	usernameField: 'username',
+	passwordField: 'token',
+	session: false
+    },
+    function(username, password, cb) {
+	console.log('checking password: ' + password);
+
+   // THE environmental variable NICETOKEN will be passed into the docker container
+   // so this is what we check the password against
+
+	var a_nice_token = process.env.NICETOKEN;
+
+	if ( password == a_nice_token ) {
+	  // the generic user in the docker container is 'student'
+	  return cb(null, 'student');
+	} else {
+	  return cb(null, false);
+	}
+    }));
+
+    passport.serializeUser(function(user, cb) {
+	var id = users.length + 1
+	users[id] = user
+	console.log('serializing ' + user + ' with id ' + id );
+	cb(null, id);
+    });
+
+    passport.deserializeUser(function(id, cb) {
+	console.log('deserializing id ' + id + ' as user ' + users[id]  );
+	cb(null, users[id] );
+    });
+
+
+
   var app = express();
   expressWs(app);
 
@@ -12,8 +59,19 @@ function startServer() {
 
   app.use('/build', express.static(__dirname + '/../build'));
 
+  app.get('/loginfail',
+    function(req, res) {
+      res.status(400);
+      res.send('Unauthorized - bad token');
+  });
+
   app.get('/', function(req, res){
-    res.sendFile(__dirname + '/index.html');
+    passport.authenticate('local', { failureRedirect: '/loginfail' }),
+    function(req, res) {
+        idx = fs.readFileSync(__dirname + '/index.html').toString():
+        idx.replace("%USERTOKEN%", req.query.token);
+        res.send(idx);
+    }
   });
 
   app.get('/style.css', function(req, res){
@@ -94,6 +152,26 @@ function startServer() {
       delete terminals[term.pid];
       delete logs[term.pid];
     });
+  });
+
+  app.get('/download-archive',
+      passport.authenticate('local', { failureRedirect: '/loginfail' }),
+      function(req, res) {
+        var archive = archiver('zip');
+
+        archive.on('error', function(err) {
+          res.status(500).send({error: err.message});
+        });
+
+        archive.on('end', function() {
+          console.log('Archive wrote %d bytes', archive.pointer());
+        });
+
+        res.attachment('archive-download.zip');
+        archive.pipe(res);
+        archive.directory('/home/student', false);
+        archive.finalize();
+
   });
 
   var port = process.env.PORT || 3000,
