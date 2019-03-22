@@ -1,14 +1,17 @@
-var express = require('express');
-var expressWs = require('express-ws');
-var os = require('os');
-var pty = require('node-pty');
-
-var passport = require('passport');
-var Strategy = require('passport-local').Strategy;
-
-var users = []
-
 function startServer() {
+
+    var express = require('express');
+    var app = express();
+    var expressWs = require('express-ws')(app);
+    var os = require('os');
+    var pty = require('node-pty');
+    var fs = require('fs');
+    var acrhiver = require('archiver');
+
+    var passport = require('passport');
+    var Strategy = require('passport-local').Strategy;
+
+    var users = []
 
     // Configure the local strategy for use by Passport.
     //
@@ -22,19 +25,18 @@ function startServer() {
 	session: false
     },
     function(username, password, cb) {
-	console.log('checking password: ' + password);
+	  console.log('checking password: ' + password);
 
-   // THE environmental variable NICETOKEN will be passed into the docker container
-   // so this is what we check the password against
+      // THE environmental variable NICETOKEN will be passed into the docker container
+      // so this is what we check the password against
+	  var a_nice_token = process.env.NICETOKEN;
 
-	var a_nice_token = process.env.NICETOKEN;
-
-	if ( password == a_nice_token ) {
-	  // the generic user in the docker container is 'student'
-	  return cb(null, 'student');
-	} else {
-	  return cb(null, false);
-	}
+	  if ( password == a_nice_token ) {
+	    // the generic user in the docker container is 'student'
+	    return cb(null, 'student');
+	  } else {
+	    return cb(null, false);
+	  }
     }));
 
     passport.serializeUser(function(user, cb) {
@@ -50,9 +52,8 @@ function startServer() {
     });
 
 
-
-  var app = express();
-  expressWs(app);
+  app.use(passport.initialize());
+  app.use(passport.session());
 
   var terminals = {},
       logs = {};
