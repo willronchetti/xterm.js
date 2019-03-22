@@ -68,7 +68,7 @@ function startServer() {
   app.get('/', function(req, res){
     passport.authenticate('local', { failureRedirect: '/loginfail' }),
     function(req, res) {
-        idx = fs.readFileSync(__dirname + '/index.html').toString():
+        idx = fs.readFileSync(__dirname + '/index.html').toString();
         idx.replace("%USERTOKEN%", req.query.token);
         res.send(idx);
     }
