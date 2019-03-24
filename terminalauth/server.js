@@ -1,18 +1,21 @@
+var express = require('express');
+var expressWs = require('express-ws');
+var os = require('os');
+var pty = require('node-pty');
+var fs = require('fs');
+var archiver = require('archiver');
+
+var passport = require('passport');
+var Strategy = require('passport-local').Strategy;
+
+var users = []
+
+
 function startServer() {
 
-    var express = require('express');
     var app = express();
-    var expressWs = require('express-ws')(app);
-    var os = require('os');
-    var pty = require('node-pty');
-    var fs = require('fs');
-    var acrhiver = require('archiver');
-
-    var passport = require('passport');
-    var Strategy = require('passport-local').Strategy;
-
-    var users = []
-
+    expressWs(app);
+ 
     // Configure the local strategy for use by Passport.
     //
     // The local strategy require a `verify` function which receives the credentials
@@ -27,9 +30,11 @@ function startServer() {
     function(username, password, cb) {
 	  console.log('checking password: ' + password);
 
-      // THE environmental variable NICETOKEN will be passed into the docker container
-      // so this is what we check the password against
-	  var a_nice_token = process.env.NICETOKEN;
+          // THE environmental variable NICETOKEN will be passed into the docker container
+          // so this is what we check the password against
+	  // XXX: Swapped to 'testing'
+          // var a_nice_token = process.env.NICETOKEN;
+          var a_nice_token = 'testing';
 
 	  if ( password == a_nice_token ) {
 	    // the generic user in the docker container is 'student'
@@ -51,12 +56,11 @@ function startServer() {
 	cb(null, users[id] );
     });
 
-
-  app.use(passport.initialize());
-  app.use(passport.session());
-
   var terminals = {},
       logs = {};
+
+ //  app.use(passport.initialize());
+ // app.use(passport.session());
 
   app.use('/build', express.static(__dirname + '/../build'));
 
@@ -67,12 +71,12 @@ function startServer() {
   });
 
   app.get('/', function(req, res){
-    passport.authenticate('local', { failureRedirect: '/loginfail' }),
-    function(req, res) {
+   // passport.authenticate('local', { failureRedirect: '/loginfail' }),
+   // function(req, res) {
         idx = fs.readFileSync(__dirname + '/index.html').toString();
         idx.replace("%USERTOKEN%", req.query.token);
         res.send(idx);
-    }
+   // }
   });
 
   app.get('/style.css', function(req, res){
@@ -84,6 +88,7 @@ function startServer() {
   });
 
   app.post('/terminals', function (req, res) {
+    //passport.authenticate('local', { failureRedirect: '/loginfail' });
     var cols = parseInt(req.query.cols),
         rows = parseInt(req.query.rows),
         term = pty.spawn(process.platform === 'win32' ? 'cmd.exe' : 'bash', [], {
@@ -156,7 +161,7 @@ function startServer() {
   });
 
   app.get('/download-archive',
-      passport.authenticate('local', { failureRedirect: '/loginfail' }),
+      //passport.authenticate('local', { failureRedirect: '/loginfail' }),
       function(req, res) {
         var archive = archiver('zip');
 

@@ -13,7 +13,7 @@
     "@types/mocha": "^2.2.33",
     "@types/node": "6.0.108",
     "@types/webpack": "^4.4.11",
-    "archiver": "^2.0.0",
+    "archiver": "^2.1.1",
     "browserify": "^13.3.0",
     "chai": "3.5.0",
     "concurrently": "^3.5.1",
