@@ -54,7 +54,7 @@ function startServer() {
 
   var terminals = {},
       logs = {};
-  
+
   app.use(passport.initialize());
   app.use(passport.session());
 
@@ -66,7 +66,7 @@ function startServer() {
       res.send('Unauthorized - bad token');
   });
 
-  app.get('/', passport.authenticate('local', {failureRedirect: '/loginfail'}), 
+  app.get('/', passport.authenticate('local', {failureRedirect: '/loginfail'}),
   function(req, res){
       idx = fs.readFileSync(__dirname + '/index.html').toString();
       idx.replace("%USERTOKEN%", req.query.token);
@@ -81,8 +81,8 @@ function startServer() {
     res.sendFile(__dirname + '/dist/client-bundle.js');
   });
 
-  app.post('/terminals', function (req, res) {
-    passport.authenticate('local', { failureRedirect: '/loginfail' });
+  app.post('/terminals', passport.authenticate('local', { failureRedirect: '/loginfail' }),
+    function(req, res) {
     var cols = parseInt(req.query.cols),
         rows = parseInt(req.query.rows),
         term = pty.spawn(process.platform === 'win32' ? 'cmd.exe' : 'bash', [], {
