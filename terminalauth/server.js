@@ -6,7 +6,7 @@ var fs = require('fs');
 var archiver = require('archiver');
 
 var passport = require('passport');
-var Strategy = require('passport-local').Strategy;
+var LocalStrategy = require('passport-local').Strategy;
 
 var users = []
 
@@ -15,24 +15,24 @@ function startServer() {
 
     var app = express();
     expressWs(app);
- 
+
     // Configure the local strategy for use by Passport.
     //
     // The local strategy require a `verify` function which receives the credentials
     // (`username` and `password`) submitted by the user.  The function must verify
-    // that the password is correct and then invoke `cb` with a user object, which
+    // that the password is correct and then invoke `done` with a user object, which
     // will be set at `req.user` in route handlers after authentication.
-    passport.use(new Strategy({
-	usernameField: 'username',
-	passwordField: 'token',
-	session: false
+    passport.use(new LocalStrategy({
+	  usernameField: 'username',
+	  passwordField: 'token',
+	  session: false
     },
     function(username, password, cb) {
 	  console.log('checking password: ' + password);
 
           // THE environmental variable NICETOKEN will be passed into the docker container
           // so this is what we check the password against
-	  // XXX: Swapped to 'testing'
+	      // XXX: Swapped to 'testing'
           // var a_nice_token = process.env.NICETOKEN;
           var a_nice_token = 'testing';
 
@@ -73,10 +73,11 @@ function startServer() {
   app.get('/', function(req, res){
    // passport.authenticate('local', { failureRedirect: '/loginfail' }),
    // function(req, res) {
-        idx = fs.readFileSync(__dirname + '/index.html').toString();
-        idx.replace("%USERTOKEN%", req.query.token);
-        res.send(idx);
+        //idx = fs.readFileSync(__dirname + '/index.html').toString();
+        //idx.replace("%USERTOKEN%", req.query.token);
+        //res.send(idx);
    // }
+   res.sendFile(__dirname + '/index.html');
   });
 
   app.get('/style.css', function(req, res){
