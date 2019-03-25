@@ -175,7 +175,18 @@ function initOptions(term: TerminalType): void {
     'termName',
     'useFlowControl',
     // Complex option
-    'theme'
+    'theme',
+    'screenReaderMode' ,
+    'maxOptionIsMeta',
+    'disableStdin',
+    'allowTransparency',
+    'bellSound',
+    'bellStyle',
+    'experimentalCharAtlas',
+    'fontFamily',
+    'fontWeight',
+    'fontWeightBold',
+    'rendererType'
   ];
   const stringOptions = {
     bellSound: null,
