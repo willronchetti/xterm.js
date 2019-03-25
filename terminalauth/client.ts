@@ -51,14 +51,6 @@ function setPadding(): void {
   term.fit();
 }
 
-function getSearchOptions(): ISearchOptions {
-  return {
-    regex: (document.getElementById('regex') as HTMLInputElement).checked,
-    wholeWord: (document.getElementById('whole-word') as HTMLInputElement).checked,
-    caseSensitive: (document.getElementById('case-sensitive') as HTMLInputElement).checked
-  };
-}
-
 createTerminal();
 
 const disposeRecreateButtonHandler = () => {
@@ -105,18 +97,6 @@ function createTerminal(): void {
   term.focus();
 
   addDomListener(paddingElement, 'change', setPadding);
-
-  addDomListener(actionElements.findNext, 'keyup', (e) => {
-    const searchOptions = getSearchOptions();
-    searchOptions.incremental = e.key !== `Enter`;
-    term.findNext(actionElements.findNext.value, searchOptions);
-  });
-
-  addDomListener(actionElements.findPrevious, 'keyup', (e) => {
-    if (e.key === `Enter`) {
-      term.findPrevious(actionElements.findPrevious.value, getSearchOptions());
-    }
-  });
 
   // fit is called within a setTimeout, cols and rows need this.
   setTimeout(() => {
