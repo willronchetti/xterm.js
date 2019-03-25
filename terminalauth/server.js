@@ -30,8 +30,7 @@ function startServer() {
 
       // THE environmental variable NICETOKEN will be passed into the docker container
       // so this is what we check the password against
-      var a_nice_token = process.env.NICETOKEN;
-
+      var a_nice_token =  'testing';//process.env.NICETOKEN;
 	    if ( password == a_nice_token ) {
 	      // the generic user in the docker container is 'student'
 	      return cb(null, 'student');
@@ -69,7 +68,7 @@ function startServer() {
   app.get('/', passport.authenticate('local', {failureRedirect: '/loginfail'}),
   function(req, res){
       idx = fs.readFileSync(__dirname + '/index.html').toString();
-      idx.replace("%USERTOKEN%", req.query.token);
+      idx = idx.replace("%USERTOKEN%", req.query.token);
       res.send(idx);
   });
 
@@ -81,8 +80,8 @@ function startServer() {
     res.sendFile(__dirname + '/dist/client-bundle.js');
   });
 
-  app.post('/terminals', passport.authenticate('local', { failureRedirect: '/loginfail' }),
-    function(req, res) {
+  app.post('/terminals', function(req, res) { 
+    passport.authenticate('local', { failureRedirect: '/loginfail' });
     var cols = parseInt(req.query.cols),
         rows = parseInt(req.query.rows),
         term = pty.spawn(process.platform === 'win32' ? 'cmd.exe' : 'bash', [], {

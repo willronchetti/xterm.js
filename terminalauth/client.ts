@@ -68,8 +68,6 @@ const disposeRecreateButtonHandler = () => {
   }
 };
 
-document.getElementById('dispose').addEventListener('click', disposeRecreateButtonHandler);
-
 function createTerminal(): void {
   // Clean terminal
   while (terminalContainer.children.length) {
