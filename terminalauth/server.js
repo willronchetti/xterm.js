@@ -38,19 +38,19 @@ function startServer() {
 	    } else {
 	      return cb(null, false);
 	    }
-      }));
+    }));
 
   passport.serializeUser(function(user, cb) {
-	var id = users.length + 1
-	users[id] = user
-	console.log('serializing ' + user + ' with id ' + id );
-	cb(null, id);
-    });
+	  var id = users.length + 1
+	  users[id] = user
+	  console.log('serializing ' + user + ' with id ' + id );
+	  cb(null, id);
+  });
 
-    passport.deserializeUser(function(id, cb) {
-	console.log('deserializing id ' + id + ' as user ' + users[id]  );
-	cb(null, users[id] );
-    });
+  passport.deserializeUser(function(id, cb) {
+	  console.log('deserializing id ' + id + ' as user ' + users[id]  );
+	  cb(null, users[id] );
+  });
 
   var terminals = {},
       logs = {};
@@ -66,13 +66,11 @@ function startServer() {
       res.send('Unauthorized - bad token');
   });
 
-  app.get('/', function(req, res){
-   passport.authenticate('local', { failureRedirect: '/loginfail' }),
-   function(req, res) {
-        idx = fs.readFileSync(__dirname + '/index.html').toString();
-        idx.replace("%USERTOKEN%", req.query.token);
-        res.send(idx);
-   }(req, res);
+  app.get('/', passport.authenticate('local', {failureRedirect: '/loginfail'}), 
+  function(req, res){
+      idx = fs.readFileSync(__dirname + '/index.html').toString();
+      idx.replace("%USERTOKEN%", req.query.token);
+      res.send(idx);
   });
 
   app.get('/style.css', function(req, res){
