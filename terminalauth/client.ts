@@ -177,7 +177,8 @@ function initOptions(term: TerminalType): void {
     // Complex option
     'theme',
     'screenReaderMode' ,
-    'maxOptionIsMeta',
+    'macOptionIsMeta',
+    'macOptionClickForcesSelection',
     'disableStdin',
     'allowTransparency',
     'bellSound',
