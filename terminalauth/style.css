@@ -14,8 +14,8 @@ body {
 
 #terminal-container {
     float: left;
-    width: 60%;
-    height: 60%;
+    width: 800px;
+    height: 450px;
     margin: 0 auto;
     padding: 2px;
 }
@@ -25,4 +25,3 @@ body {
     color: #fafafa;
     padding: 2px;
 }
-
