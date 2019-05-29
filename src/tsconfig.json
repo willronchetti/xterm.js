@@ -18,10 +18,10 @@
     "noImplicitAny": true
   },
   "include": [
-    "src/**/*",
-    "typings/xterm.d.ts"
+    "./**/*",
+    "../typings/xterm.d.ts"
   ],
   "exclude": [
-    "src/addons/**/*"
+    "./addons/**/*"
   ]
 }
