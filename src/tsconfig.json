@@ -9,8 +9,8 @@
       "scripthost",
       "es2015.promise"
     ],
-    "rootDir": "src",
-    "outDir": "lib",
+    "rootDir": ".",
+    "outDir": "../lib",
     "sourceMap": true,
     "removeComments": true,
     "preserveWatchOutput": true,
