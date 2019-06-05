@@ -58,7 +58,8 @@ function startServer() {
   app.use(passport.session());
 
   app.use('/build', express.static(__dirname + '/../build'));
-
+  app.use('/img', express.static(__dirname + '/img'));
+  
   app.get('/loginfail',
     function(req, res) {
       res.status(400);
@@ -80,7 +81,7 @@ function startServer() {
     res.sendFile(__dirname + '/dist/client-bundle.js');
   });
 
-  app.post('/terminals', function(req, res) {
+  app.post('/terminals', function(req, res) { 
     passport.authenticate('local', { failureRedirect: '/loginfail' });
     var cols = parseInt(req.query.cols),
         rows = parseInt(req.query.rows),
