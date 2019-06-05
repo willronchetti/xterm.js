@@ -7,33 +7,33 @@
 
 /// <reference path="../typings/xterm.d.ts"/>
 
-import { Terminal } from '../lib/public/Terminal';
-import * as attach from '../lib/addons/attach/attach';
-import * as fit from '../lib/addons/fit/fit';
-import * as fullscreen from '../lib/addons/fullscreen/fullscreen';
-import * as search from '../lib/addons/search/search';
-import * as webLinks from '../lib/addons/webLinks/webLinks';
-import * as winptyCompat from '../lib/addons/winptyCompat/winptyCompat';
-import { ISearchOptions } from '../lib/addons/search/Interfaces';
+// Use tsc version (yarn watch)
+import { Terminal } from '../out/public/Terminal';
+// Use webpacked version (yarn package)
+// import { Terminal } from '../lib/xterm';
+
+import { AttachAddon } from 'xterm-addon-attach';
+import { FitAddon } from 'xterm-addon-fit';
+import { SearchAddon, ISearchOptions } from 'xterm-addon-search';
+import { WebLinksAddon } from 'xterm-addon-web-links';
 
 // Pulling in the module's types relies on the <reference> above, it's looks a
 // little weird here as we're importing "this" module
-import { Terminal as TerminalType } from 'xterm';
+import { Terminal as TerminalType, ITerminalOptions } from 'xterm';
 
 export interface IWindowWithTerminal extends Window {
   term: TerminalType;
+  Terminal?: typeof TerminalType;
+  AttachAddon?: typeof AttachAddon;
+  FitAddon?: typeof FitAddon;
+  SearchAddon?: typeof SearchAddon;
+  WebLinksAddon?: typeof WebLinksAddon;
 }
 declare let window: IWindowWithTerminal;
 
-Terminal.applyAddon(attach);
-Terminal.applyAddon(fit);
-Terminal.applyAddon(fullscreen);
-Terminal.applyAddon(search);
-Terminal.applyAddon(webLinks);
-Terminal.applyAddon(winptyCompat);
-
-
 let term;
+let fitAddon: FitAddon;
+let searchAddon: SearchAddon;
 let protocol;
 let socketURL;
 let socket;
@@ -51,7 +51,13 @@ function setPadding(): void {
   term.fit();
 }
 
-createTerminal();
+function getSearchOptions(): ISearchOptions {
+  return {
+    regex: (document.getElementById('regex') as HTMLInputElement).checked,
+    wholeWord: (document.getElementById('whole-word') as HTMLInputElement).checked,
+    caseSensitive: (document.getElementById('case-sensitive') as HTMLInputElement).checked
+  };
+}
 
 const disposeRecreateButtonHandler = () => {
   // If the terminal exists dispose of it, otherwise recreate it
@@ -68,14 +74,38 @@ const disposeRecreateButtonHandler = () => {
   }
 };
 
+if (document.location.pathname === '/test') {
+  window.Terminal = Terminal;
+  window.AttachAddon = AttachAddon;
+  window.FitAddon = FitAddon;
+  window.SearchAddon = SearchAddon;
+  window.WebLinksAddon = WebLinksAddon;
+} else {
+  createTerminal();
+  document.getElementById('dispose').addEventListener('click', disposeRecreateButtonHandler);
+}
+
 function createTerminal(): void {
   // Clean terminal
   while (terminalContainer.children.length) {
     terminalContainer.removeChild(terminalContainer.children[0]);
   }
-  term = new Terminal({});
+
+  const isWindows = ['Windows', 'Win16', 'Win32', 'WinCE'].indexOf(navigator.platform) >= 0;
+  term = new Terminal({
+    windowsMode: isWindows
+  } as ITerminalOptions);
+
+  // Load addons
+  const typedTerm = term as TerminalType;
+  typedTerm.loadAddon(new WebLinksAddon());
+  searchAddon = new SearchAddon();
+  typedTerm.loadAddon(searchAddon);
+  fitAddon = new FitAddon();
+  typedTerm.loadAddon(fitAddon);
+
   window.term = term;  // Expose `term` to window for debugging purposes
-  term.on('resize', (size: { cols: number, rows: number }) => {
+  term.onResize((size: { cols: number, rows: number }) => {
     if (!pid) {
       return;
     }
@@ -89,12 +119,22 @@ function createTerminal(): void {
   socketURL = protocol + location.hostname + ((location.port) ? (':' + location.port) : '') + '/terminals/';
 
   term.open(terminalContainer);
-  term.winptyCompatInit();
-  term.webLinksInit();
-  term.fit();
+  fitAddon.fit();
   term.focus();
 
   addDomListener(paddingElement, 'change', setPadding);
+
+  addDomListener(actionElements.findNext, 'keyup', (e) => {
+    const searchOptions = getSearchOptions();
+    searchOptions.incremental = e.key !== `Enter`;
+    searchAddon.findNext(actionElements.findNext.value, searchOptions);
+  });
+
+  addDomListener(actionElements.findPrevious, 'keyup', (e) => {
+    if (e.key === `Enter`) {
+      searchAddon.findPrevious(actionElements.findPrevious.value, getSearchOptions());
+    }
+  });
 
   // fit is called within a setTimeout, cols and rows need this.
   setTimeout(() => {
@@ -121,7 +161,14 @@ function createTerminal(): void {
 }
 
 function runRealTerminal(): void {
-  term.attach(socket);
+  /**
+   * The demo defaults to string transport by default.
+   * To run it with UTF8 binary transport, swap comment on
+   * the lines below. (Must also be switched in server.js)
+   */
+  term.loadAddon(new AttachAddon(socket));
+  // term.loadAddon(new AttachAddon(socket, {inputUtf8: true}));
+
   term._initialized = true;
 }
 
@@ -142,24 +189,21 @@ function runFakeTerminal(): void {
   term.writeln('');
   term.prompt();
 
-  term._core.register(term.addDisposableListener('key', (key, ev) => {
-    const printable = !ev.altKey && !ev.altGraphKey && !ev.ctrlKey && !ev.metaKey;
+  term.onKey((e: { key: string, domEvent: KeyboardEvent }) => {
+    const ev = e.domEvent;
+    const printable = !ev.altKey && !ev.ctrlKey && !ev.metaKey;
 
     if (ev.keyCode === 13) {
       term.prompt();
     } else if (ev.keyCode === 8) {
      // Do not delete the prompt
-      if (term.x > 2) {
+      if (term._core.buffer.x > 2) {
         term.write('\b \b');
       }
     } else if (printable) {
-      term.write(key);
+      term.write(e.key);
     }
-  }));
-
-  term._core.register(term.addDisposableListener('paste', (data, ev) => {
-    term.write(data);
-  }));
+  });
 }
 
 function initOptions(term: TerminalType): void {
@@ -173,22 +217,16 @@ function initOptions(term: TerminalType): void {
     'termName',
     'useFlowControl',
     // Complex option
-    'theme',
-    'screenReaderMode' ,
-    'macOptionIsMeta',
-    'macOptionClickForcesSelection',
-    'disableStdin',
-    'allowTransparency',
-    'bellSound',
-    'bellStyle',
-    'experimentalCharAtlas',
-    'fontFamily',
-    'fontWeight',
-    'fontWeightBold',
-    'rendererType'
+    'theme'
   ];
   const stringOptions = {
+    bellSound: null,
+    bellStyle: ['none', 'sound'],
     cursorStyle: ['block', 'underline', 'bar'],
+    fontFamily: null,
+    fontWeight: ['normal', 'bold', '100', '200', '300', '400', '500', '600', '700', '800', '900'],
+    fontWeightBold: ['normal', 'bold', '100', '200', '300', '400', '500', '600', '700', '800', '900'],
+    rendererType: ['dom', 'canvas']
   };
   const options = Object.keys((<any>term)._core.options);
   const booleanOptions = [];
@@ -244,8 +282,11 @@ function initOptions(term: TerminalType): void {
       console.log('change', o, input.value);
       if (o === 'cols' || o === 'rows') {
         updateTerminalSize();
+      } else if (o === 'lineHeight') {
+        term.setOption(o, parseFloat(input.value));
+        updateTerminalSize();
       } else {
-        term.setOption(o, o === 'lineHeight' ? parseFloat(input.value) : parseInt(input.value, 10));
+        term.setOption(o, parseInt(input.value));
       }
     });
   });
@@ -266,9 +307,9 @@ function addDomListener(element: HTMLElement, type: string, handler: (...args: a
 function updateTerminalSize(): void {
   const cols = parseInt((<HTMLInputElement>document.getElementById(`opt-cols`)).value, 10);
   const rows = parseInt((<HTMLInputElement>document.getElementById(`opt-rows`)).value, 10);
-  const width = (cols * term._core.renderer.dimensions.actualCellWidth + term._core.viewport.scrollBarWidth).toString() + 'px';
-  const height = (rows * term._core.renderer.dimensions.actualCellHeight).toString() + 'px';
+  const width = (cols * term._core._renderCoordinator.dimensions.actualCellWidth + term._core.viewport.scrollBarWidth).toString() + 'px';
+  const height = (rows * term._core._renderCoordinator.dimensions.actualCellHeight).toString() + 'px';
   terminalContainer.style.width = width;
   terminalContainer.style.height = height;
-  term.fit();
+  fitAddon.fit();
 }

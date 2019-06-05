@@ -13,7 +13,25 @@
       "runtimeArgs": [
         "--colors",
         "--recursive",
-        "${workspaceRoot}/lib"
+        "${workspaceRoot}/lib/**/*.test.js"
+      ],
+      "sourceMaps": true,
+      "outFiles": [ "${workspaceRoot}/lib/**/*.js" ],
+      "internalConsoleOptions": "openOnSessionStart"
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Integration Tests",
+      "cwd": "${workspaceRoot}",
+      "runtimeExecutable": "${workspaceRoot}/node_modules/.bin/mocha",
+      "windows": {
+        "runtimeExecutable": "${workspaceRoot}/node_modules/.bin/mocha.cmd"
+      },
+      "runtimeArgs": [
+        "--colors",
+        "--recursive",
+        "${workspaceRoot}/lib/**/*.api.js"
       ],
       "sourceMaps": true,
       "outFiles": [ "${workspaceRoot}/lib/**/*.js" ],
@@ -23,10 +41,7 @@
       "type": "chrome",
       "request": "launch",
       "name": "Demo Client",
-      "url": "http://0.0.0.0:3000",
-      "windows": {
-        "url": "http://127.0.0.1:3000"
-      },
+      "url": "http://127.0.0.1:3000",
       "webRoot": "${workspaceFolder}/"
     },
     {
@@ -38,7 +53,11 @@
         "run",
         "start-debug"
       ],
-      "port": 9229
+      "port": 9229,
+      "serverReadyAction": {
+        "action": "openExternally",
+        "pattern": "App listening to (http://.*?:[0-9]+)"
+      }
     }
   ]
 }

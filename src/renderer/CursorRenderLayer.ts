@@ -3,10 +3,12 @@
  * @license MIT
  */
 
-import { CHAR_DATA_WIDTH_INDEX } from '../Buffer';
-import { IColorSet, IRenderDimensions } from './Types';
+import { IRenderDimensions } from './Types';
 import { BaseRenderLayer } from './BaseRenderLayer';
-import { CharData, ITerminal } from '../Types';
+import { ITerminal } from '../Types';
+import { ICellData } from 'core/Types';
+import { CellData } from 'core/buffer/BufferLine';
+import { IColorSet } from 'ui/Types';
 
 interface ICursorState {
   x: number;
@@ -23,8 +25,9 @@ const BLINK_INTERVAL = 600;
 
 export class CursorRenderLayer extends BaseRenderLayer {
   private _state: ICursorState;
-  private _cursorRenderers: {[key: string]: (terminal: ITerminal, x: number, y: number, charData: CharData) => void};
+  private _cursorRenderers: {[key: string]: (terminal: ITerminal, x: number, y: number, cell: ICellData) => void};
   private _cursorBlinkStateManager: CursorBlinkStateManager;
+  private _cell: ICellData = new CellData();
 
   constructor(container: HTMLElement, zIndex: number, colors: IColorSet) {
     super(container, 'cursor', zIndex, true, colors);
@@ -127,8 +130,8 @@ export class CursorRenderLayer extends BaseRenderLayer {
       return;
     }
 
-    const charData = terminal.buffer.lines.get(cursorY).get(terminal.buffer.x);
-    if (!charData) {
+    terminal.buffer.lines.get(cursorY).loadCell(terminal.buffer.x, this._cell);
+    if (this._cell.content === undefined) {
       return;
     }
 
@@ -136,13 +139,13 @@ export class CursorRenderLayer extends BaseRenderLayer {
       this._clearCursor();
       this._ctx.save();
       this._ctx.fillStyle = this._colors.cursor.css;
-      this._renderBlurCursor(terminal, terminal.buffer.x, viewportRelativeCursorY, charData);
+      this._renderBlurCursor(terminal, terminal.buffer.x, viewportRelativeCursorY, this._cell);
       this._ctx.restore();
       this._state.x = terminal.buffer.x;
       this._state.y = viewportRelativeCursorY;
       this._state.isFocused = false;
       this._state.style = terminal.options.cursorStyle;
-      this._state.width = charData[CHAR_DATA_WIDTH_INDEX];
+      this._state.width = this._cell.getWidth();
       return;
     }
 
@@ -158,21 +161,21 @@ export class CursorRenderLayer extends BaseRenderLayer {
           this._state.y === viewportRelativeCursorY &&
           this._state.isFocused === terminal.isFocused &&
           this._state.style === terminal.options.cursorStyle &&
-          this._state.width === charData[CHAR_DATA_WIDTH_INDEX]) {
+          this._state.width === this._cell.getWidth()) {
         return;
       }
       this._clearCursor();
     }
 
     this._ctx.save();
-    this._cursorRenderers[terminal.options.cursorStyle || 'block'](terminal, terminal.buffer.x, viewportRelativeCursorY, charData);
+    this._cursorRenderers[terminal.options.cursorStyle || 'block'](terminal, terminal.buffer.x, viewportRelativeCursorY, this._cell);
     this._ctx.restore();
 
     this._state.x = terminal.buffer.x;
     this._state.y = viewportRelativeCursorY;
     this._state.isFocused = false;
     this._state.style = terminal.options.cursorStyle;
-    this._state.width = charData[CHAR_DATA_WIDTH_INDEX];
+    this._state.width = this._cell.getWidth();
   }
 
   private _clearCursor(): void {
@@ -188,33 +191,33 @@ export class CursorRenderLayer extends BaseRenderLayer {
     }
   }
 
-  private _renderBarCursor(terminal: ITerminal, x: number, y: number, charData: CharData): void {
+  private _renderBarCursor(terminal: ITerminal, x: number, y: number, cell: ICellData): void {
     this._ctx.save();
     this._ctx.fillStyle = this._colors.cursor.css;
     this.fillLeftLineAtCell(x, y);
     this._ctx.restore();
   }
 
-  private _renderBlockCursor(terminal: ITerminal, x: number, y: number, charData: CharData): void {
+  private _renderBlockCursor(terminal: ITerminal, x: number, y: number, cell: ICellData): void {
     this._ctx.save();
     this._ctx.fillStyle = this._colors.cursor.css;
-    this.fillCells(x, y, charData[CHAR_DATA_WIDTH_INDEX], 1);
+    this.fillCells(x, y, cell.getWidth(), 1);
     this._ctx.fillStyle = this._colors.cursorAccent.css;
-    this.fillCharTrueColor(terminal, charData, x, y);
+    this.fillCharTrueColor(terminal, cell, x, y);
     this._ctx.restore();
   }
 
-  private _renderUnderlineCursor(terminal: ITerminal, x: number, y: number, charData: CharData): void {
+  private _renderUnderlineCursor(terminal: ITerminal, x: number, y: number, cell: ICellData): void {
     this._ctx.save();
     this._ctx.fillStyle = this._colors.cursor.css;
     this.fillBottomLineAtCells(x, y);
     this._ctx.restore();
   }
 
-  private _renderBlurCursor(terminal: ITerminal, x: number, y: number, charData: CharData): void {
+  private _renderBlurCursor(terminal: ITerminal, x: number, y: number, cell: ICellData): void {
     this._ctx.save();
     this._ctx.strokeStyle = this._colors.cursor.css;
-    this.strokeRectAtCell(x, y, charData[CHAR_DATA_WIDTH_INDEX], 1);
+    this.strokeRectAtCell(x, y, cell.getWidth(), 1);
     this._ctx.restore();
   }
 }

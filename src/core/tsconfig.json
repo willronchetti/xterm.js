@@ -1,20 +1,17 @@
 {
+  "extends": "../tsconfig-library-base",
   "compilerOptions": {
-    "target": "es5",
-    "lib": [
-      "es5"
-    ],
-    "rootDir": ".",
-    "noEmit": true,
-    "strict": true,
-    "pretty": true,
+    "outDir": "../../out",
     "types": [
-      "../../node_modules/@types/mocha",
-      "../../"
-    ]
+      "../../node_modules/@types/mocha"
+    ],
+    "baseUrl": "..",
+    "paths": {
+      "common/*": [ "./common/*" ]
+    }
   },
-  "include": [
-    "./**/*",
-    "../common/**/*"
+  "include": [ "./**/*" ],
+  "references": [
+    { "path": "../common" }
   ]
 }

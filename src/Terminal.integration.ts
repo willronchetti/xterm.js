@@ -5,16 +5,14 @@
  * This file contains integration tests for xterm.js.
  */
 
-import * as cp from 'child_process';
 import * as glob from 'glob';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as pty from 'node-pty';
-import { assert } from 'chai';
 import { Terminal } from './Terminal';
-import { CHAR_DATA_CHAR_INDEX, WHITESPACE_CELL_CHAR } from './Buffer';
 import { IViewport } from './Types';
+import { CellData, WHITESPACE_CELL_CHAR } from 'core/buffer/BufferLine';
 
 class TestTerminal extends Terminal {
   innerWrite(): void { this._innerWrite(); }
@@ -67,7 +65,7 @@ function terminalToString(term: Terminal): string {
   for (let line = term.buffer.ybase; line < term.buffer.ybase + term.rows; line++) {
     lineText = '';
     for (let cell = 0; cell < term.cols; ++cell) {
-      lineText += term.buffer.lines.get(line).get(cell)[CHAR_DATA_CHAR_INDEX] || WHITESPACE_CELL_CHAR;
+      lineText += term.buffer.lines.get(line).loadCell(cell, new CellData()).getChars() || WHITESPACE_CELL_CHAR;
     }
     // rtrim empty cells as xterm does
     lineText = lineText.replace(/\s+$/, '');
@@ -91,7 +89,8 @@ if (os.platform() !== 'win32') {
   primitivePty = (<any>pty).native.open(cols, rows);
 
   /** tests */
-  describe('xterm output comparison', () => {
+  describe('xterm output comparison', function(): void {
+    this.timeout(10000);
     let xterm: TestTerminal;
 
     beforeEach(() => {
@@ -113,8 +112,8 @@ if (os.platform() !== 'win32') {
       51, 52, 54, 55, 56, 57, 58, 59, 60, 61,
       63, 68
     ];
+    // These are failing on macOS only
     if (os.platform() === 'darwin') {
-      // These are failing on macOS only
       skip.push(3, 7, 11, 67);
     }
     for (let i = 0; i < files.length; i++) {
@@ -122,9 +121,9 @@ if (os.platform() !== 'win32') {
         continue;
       }
       ((filename: string) => {
+        const inFile = fs.readFileSync(filename, 'utf8');
         it(filename.split('/').slice(-1)[0], done => {
           ptyReset(() => {
-            const inFile = fs.readFileSync(filename, 'utf8');
             ptyWriteRead(inFile, fromPty => {
               // uncomment this to get log from terminal
               // console.log = function(){};
@@ -153,16 +152,3 @@ if (os.platform() !== 'win32') {
     }
   });
 }
-
-describe('typings', () => {
-  it('should throw no compile errors', function (): void {
-    this.timeout(20000);
-    let tsc = path.join(__dirname, '..', 'node_modules', '.bin', 'tsc');
-    if (process.platform === 'win32') {
-      tsc += '.cmd';
-    }
-    const fixtureDir = path.join(__dirname, '..', 'fixtures', 'typings-test');
-    const result = cp.spawnSync(tsc, { cwd: fixtureDir });
-    assert.equal(result.status, 0, `build did not succeed:\nstdout: ${result.stdout.toString()}\nstderr: ${result.stderr.toString()}\n`);
-  });
-});

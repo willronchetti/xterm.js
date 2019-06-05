@@ -3,23 +3,39 @@
  * @license MIT
  */
 
-import { Terminal as ITerminalApi, ITerminalOptions, IMarker, IDisposable, ILinkMatcherOptions, ITheme, ILocalizableStrings } from 'xterm';
-import { ITerminal } from '../Types';
+import { Terminal as ITerminalApi, ITerminalOptions, IMarker, IDisposable, ILinkMatcherOptions, ITheme, ILocalizableStrings, ITerminalAddon, ISelectionPosition, IBuffer as IBufferApi, IBufferLine as IBufferLineApi, IBufferCell as IBufferCellApi } from 'xterm';
+import { ITerminal, IBuffer } from '../Types';
+import { IBufferLine } from 'core/Types';
 import { Terminal as TerminalCore } from '../Terminal';
 import * as Strings from '../Strings';
+import { IEvent } from 'common/EventEmitter2';
+import { AddonManager } from './AddonManager';
 
 export class Terminal implements ITerminalApi {
   private _core: ITerminal;
+  private _addonManager: AddonManager;
 
   constructor(options?: ITerminalOptions) {
     this._core = new TerminalCore(options);
+    this._addonManager = new AddonManager();
   }
+
+  public get onCursorMove(): IEvent<void> { return this._core.onCursorMove; }
+  public get onLineFeed(): IEvent<void> { return this._core.onLineFeed; }
+  public get onSelectionChange(): IEvent<void> { return this._core.onSelectionChange; }
+  public get onData(): IEvent<string> { return this._core.onData; }
+  public get onTitleChange(): IEvent<string> { return this._core.onTitleChange; }
+  public get onScroll(): IEvent<number> { return this._core.onScroll; }
+  public get onKey(): IEvent<{ key: string, domEvent: KeyboardEvent }> { return this._core.onKey; }
+  public get onRender(): IEvent<{ start: number, end: number }> { return this._core.onRender; }
+  public get onResize(): IEvent<{ cols: number, rows: number }> { return this._core.onResize; }
 
   public get element(): HTMLElement { return this._core.element; }
   public get textarea(): HTMLTextAreaElement { return this._core.textarea; }
   public get rows(): number { return this._core.rows; }
   public get cols(): number { return this._core.cols; }
-  public get markers(): IMarker[] { return this._core.markers; }
+  public get buffer(): IBufferApi { return new BufferApiView(this._core.buffer); }
+  public get markers(): ReadonlyArray<IMarker> { return this._core.markers; }
   public blur(): void {
     this._core.blur();
   }
@@ -83,8 +99,14 @@ export class Terminal implements ITerminalApi {
   public hasSelection(): boolean {
     return this._core.hasSelection();
   }
+  public select(column: number, row: number, length: number): void {
+    this._core.select(column, row, length);
+  }
   public getSelection(): string {
     return this._core.getSelection();
+  }
+  public getSelectionPosition(): ISelectionPosition | undefined {
+    return this._core.getSelectionPosition();
   }
   public clearSelection(): void {
     this._core.clearSelection();
@@ -96,10 +118,8 @@ export class Terminal implements ITerminalApi {
     this._core.selectLines(start, end);
   }
   public dispose(): void {
+    this._addonManager.dispose();
     this._core.dispose();
-  }
-  public destroy(): void {
-    this._core.destroy();
   }
   public scrollLines(amount: number): void {
     this._core.scrollLines(amount);
@@ -122,20 +142,23 @@ export class Terminal implements ITerminalApi {
   public write(data: string): void {
     this._core.write(data);
   }
+  public writeUtf8(data: Uint8Array): void {
+    this._core.writeUtf8(data);
+  }
   public getOption(key: 'bellSound' | 'bellStyle' | 'cursorStyle' | 'fontFamily' | 'fontWeight' | 'fontWeightBold' | 'rendererType' | 'termName'): string;
-  public getOption(key: 'allowTransparency' | 'cancelEvents' | 'convertEol' | 'cursorBlink' | 'debug' | 'disableStdin' | 'enableBold' | 'macOptionIsMeta' | 'rightClickSelectsWord' | 'popOnBell' | 'screenKeys' | 'useFlowControl' | 'visualBell'): boolean;
+  public getOption(key: 'allowTransparency' | 'cancelEvents' | 'convertEol' | 'cursorBlink' | 'debug' | 'disableStdin' | 'macOptionIsMeta' | 'rightClickSelectsWord' | 'popOnBell' | 'screenKeys' | 'useFlowControl' | 'visualBell'): boolean;
   public getOption(key: 'colors'): string[];
   public getOption(key: 'cols' | 'fontSize' | 'letterSpacing' | 'lineHeight' | 'rows' | 'tabStopWidth' | 'scrollback'): number;
   public getOption(key: 'handler'): (data: string) => void;
   public getOption(key: string): any;
   public getOption(key: any): any {
-    return this._core.getOption(key);
+    return this._core.optionsService.getOption(key);
   }
   public setOption(key: 'bellSound' | 'fontFamily' | 'termName', value: string): void;
   public setOption(key: 'fontWeight' | 'fontWeightBold', value: 'normal' | 'bold' | '100' | '200' | '300' | '400' | '500' | '600' | '700' | '800' | '900'): void;
   public setOption(key: 'bellStyle', value: 'none' | 'visual' | 'sound' | 'both'): void;
   public setOption(key: 'cursorStyle', value: 'block' | 'underline' | 'bar'): void;
-  public setOption(key: 'allowTransparency' | 'cancelEvents' | 'convertEol' | 'cursorBlink' | 'debug' | 'disableStdin' | 'enableBold' | 'macOptionIsMeta' | 'rightClickSelectsWord' | 'popOnBell' | 'screenKeys' | 'useFlowControl' | 'visualBell', value: boolean): void;
+  public setOption(key: 'allowTransparency' | 'cancelEvents' | 'convertEol' | 'cursorBlink' | 'debug' | 'disableStdin' | 'macOptionIsMeta' | 'rightClickSelectsWord' | 'popOnBell' | 'screenKeys' | 'useFlowControl' | 'visualBell', value: boolean): void;
   public setOption(key: 'colors', value: string[]): void;
   public setOption(key: 'fontSize' | 'letterSpacing' | 'lineHeight' | 'tabStopWidth' | 'scrollback', value: number): void;
   public setOption(key: 'handler', value: (data: string) => void): void;
@@ -143,7 +166,7 @@ export class Terminal implements ITerminalApi {
   public setOption(key: 'cols' | 'rows', value: number): void;
   public setOption(key: string, value: any): void;
   public setOption(key: any, value: any): void {
-    this._core.setOption(key, value);
+    this._core.optionsService.setOption(key, value);
   }
   public refresh(start: number, end: number): void {
     this._core.refresh(start, end);
@@ -154,7 +177,48 @@ export class Terminal implements ITerminalApi {
   public static applyAddon(addon: any): void {
     addon.apply(Terminal);
   }
+  public loadAddon(addon: ITerminalAddon): void {
+    return this._addonManager.loadAddon(this, addon);
+  }
   public static get strings(): ILocalizableStrings {
     return Strings;
   }
+}
+
+class BufferApiView implements IBufferApi {
+  constructor(private _buffer: IBuffer) {}
+
+  public get cursorY(): number { return this._buffer.y; }
+  public get cursorX(): number { return this._buffer.x; }
+  public get viewportY(): number { return this._buffer.ydisp; }
+  public get baseY(): number { return this._buffer.ybase; }
+  public get length(): number { return this._buffer.lines.length; }
+  public getLine(y: number): IBufferLineApi | undefined {
+    const line = this._buffer.lines.get(y);
+    if (!line) {
+      return undefined;
+    }
+    return new BufferLineApiView(line);
+  }
+}
+
+class BufferLineApiView implements IBufferLineApi {
+  constructor(private _line: IBufferLine) {}
+
+  public get isWrapped(): boolean { return this._line.isWrapped; }
+  public getCell(x: number): IBufferCellApi | undefined {
+    if (x < 0 || x >= this._line.length) {
+      return undefined;
+    }
+    return new BufferCellApiView(this._line, x);
+  }
+  public translateToString(trimRight?: boolean, startColumn?: number, endColumn?: number): string {
+    return this._line.translateToString(trimRight, startColumn, endColumn);
+  }
+}
+
+class BufferCellApiView implements IBufferCellApi {
+  constructor(private _line: IBufferLine, private _x: number) {}
+  public get char(): string { return this._line.getString(this._x); }
+  public get width(): number { return this._line.getWidth(this._x); }
 }

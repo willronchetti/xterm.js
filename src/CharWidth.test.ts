@@ -3,11 +3,11 @@
  * @license MIT
  */
 
-import { TestTerminal } from './ui/TestUtils.test';
+import { TestTerminal } from './TestUtils.test';
 import { assert } from 'chai';
 import { getStringCellWidth, wcwidth } from './CharWidth';
 import { IBuffer } from './Types';
-import { CHAR_DATA_WIDTH_INDEX, CHAR_DATA_CHAR_INDEX } from './Buffer';
+import { CellData, CHAR_DATA_WIDTH_INDEX, CHAR_DATA_CHAR_INDEX } from 'core/buffer/BufferLine';
 
 
 describe('getStringCellWidth', function(): void {
@@ -22,7 +22,7 @@ describe('getStringCellWidth', function(): void {
     for (let i = start; i < end; ++i) {
       const line = buffer.lines.get(i);
       for (let j = 0; j < line.length; ++j) { // TODO: change to trimBorder with multiline
-        const ch = line.get(j);
+        const ch = line.loadCell(j, new CellData()).getAsCharData();
         result += ch[CHAR_DATA_WIDTH_INDEX];
         // return on sentinel
         if (ch[CHAR_DATA_CHAR_INDEX] === sentinel) {

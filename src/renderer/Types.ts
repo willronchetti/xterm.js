@@ -4,7 +4,8 @@
  */
 
 import { ITerminal, CharacterJoinerHandler } from '../Types';
-import { IEventEmitter, ITheme, IDisposable } from 'xterm';
+import { IDisposable } from 'xterm';
+import { IColorSet } from 'ui/Types';
 
 /**
  * Flags used to render terminal text properly.
@@ -23,13 +24,12 @@ export const enum FLAGS {
  * Note that IRenderer implementations should emit the refresh event after
  * rendering rows to the screen.
  */
-export interface IRenderer extends IEventEmitter, IDisposable {
-  dimensions: IRenderDimensions;
-  colorManager: IColorManager;
+export interface IRenderer extends IDisposable {
+  readonly dimensions: IRenderDimensions;
 
   dispose(): void;
-  setTheme(theme: ITheme): IColorSet;
-  onWindowResize(devicePixelRatio: number): void;
+  setColors(colors: IColorSet): void;
+  onDevicePixelRatioChange(): void;
   onResize(cols: number, rows: number): void;
   onCharSizeChanged(): void;
   onBlur(): void;
@@ -38,13 +38,9 @@ export interface IRenderer extends IEventEmitter, IDisposable {
   onCursorMove(): void;
   onOptionsChanged(): void;
   clear(): void;
-  refreshRows(start: number, end: number): void;
+  renderRows(start: number, end: number): void;
   registerCharacterJoiner(handler: CharacterJoinerHandler): number;
   deregisterCharacterJoiner(joinerId: number): boolean;
-}
-
-export interface IColorManager {
-  colors: IColorSet;
 }
 
 export interface IRenderDimensions {
@@ -86,7 +82,7 @@ export interface IRenderLayer extends IDisposable {
   /**
    * Called when the theme changes.
    */
-  onThemeChanged(terminal: ITerminal, colorSet: IColorSet): void;
+  setColors(terminal: ITerminal, colorSet: IColorSet): void;
 
   /**
    * Called when the data in the grid has changed (or needs to be rendered
@@ -129,18 +125,4 @@ export interface ICharacterJoinerRegistry {
   registerCharacterJoiner(handler: (text: string) => [number, number][]): number;
   deregisterCharacterJoiner(joinerId: number): boolean;
   getJoinedCharacters(row: number): [number, number][];
-}
-
-export interface IColor {
-  css: string;
-  rgba: number; // 32-bit int with rgba in each byte
-}
-
-export interface IColorSet {
-  foreground: IColor;
-  background: IColor;
-  cursor: IColor;
-  cursorAccent: IColor;
-  selection: IColor;
-  ansi: IColor[];
 }

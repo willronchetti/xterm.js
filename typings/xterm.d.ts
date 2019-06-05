@@ -77,31 +77,6 @@ declare module 'xterm' {
     drawBoldTextInBrightColors?: boolean;
 
     /**
-     * Whether to enable the rendering of bold text.
-     *
-     * @deprecated Use fontWeight and fontWeightBold instead.
-     */
-    enableBold?: boolean;
-
-    /**
-     * What character atlas implementation to use. The character atlas caches drawn characters,
-     * speeding up rendering significantly. However, it can introduce some minor rendering
-     * artifacts.
-     *
-     * - 'none': Don't use an atlas.
-     * - 'static': Generate an atlas when the terminal starts or is reconfigured. This atlas will
-     *   only contain ASCII characters in 16 colors.
-     * - 'dynamic': Generate an atlas using a LRU cache as characters are requested. Limited to
-     *   ASCII characters (for now), but supports 256 colors. For characters covered by the static
-     *   cache, it's slightly slower in comparison, since there's more overhead involved in
-     *   managing the cache.
-     *
-     * Currently defaults to 'static'. This option may be removed in the future. If it is, passed
-     * parameters will be ignored.
-     */
-    experimentalCharAtlas?: 'none' | 'static' | 'dynamic';
-
-    /**
      * The font size used to render text.
      */
     fontSize?: number;
@@ -188,6 +163,18 @@ declare module 'xterm' {
      * The color theme of the terminal.
      */
     theme?: ITheme;
+
+    /**
+     * Whether "Windows mode" is enabled. Because Windows backends winpty and
+     * conpty operate by doing line wrapping on their side, xterm.js does not
+     * have access to wrapped lines. When Windows mode is enabled the following
+     * changes will be in effect:
+     *
+     * - Reflow is disabled.
+     * - Lines are assumed to be wrapped if the last character of the line is
+     *   not whitespace.
+     */
+    windowsMode?: boolean;
   }
 
   /**
@@ -263,7 +250,7 @@ declare module 'xterm' {
      * A callback that fires when the mouse leaves a link. Note that this can
      * happen even when tooltipCallback hasn't fired for the link yet.
      */
-    leaveCallback?: (event: MouseEvent, uri: string) => boolean | void;
+    leaveCallback?: () => void;
 
     /**
      * The priority of the link matcher, this defines the order in which the link
@@ -293,6 +280,14 @@ declare module 'xterm' {
    */
   export interface IDisposable {
     dispose(): void;
+  }
+
+  /**
+   * An event that can be listened to.
+   * @returns an `IDisposable` to stop listening.
+   */
+  export interface IEvent<T> {
+    (listener: (e: T) => any): IDisposable;
   }
 
   export interface IMarker extends IDisposable {
@@ -336,10 +331,17 @@ declare module 'xterm' {
     readonly cols: number;
 
     /**
+     * (EXPERIMENTAL) The terminal's current buffer, this might be either the
+     * normal buffer or the alt buffer depending on what's running in the
+     * terminal.
+     */
+    readonly buffer: IBuffer;
+
+    /**
      * (EXPERIMENTAL) Get all markers registered against the buffer. If the alt
      * buffer is active this will always return [].
      */
-    readonly markers: IMarker[];
+    readonly markers: ReadonlyArray<IMarker>;
 
     /**
      * Natural language strings that can be localized.
@@ -352,6 +354,70 @@ declare module 'xterm' {
      * @param options An object containing a set of options.
      */
     constructor(options?: ITerminalOptions);
+
+    /**
+     * Adds an event listener for the cursor moves.
+     * @returns an `IDisposable` to stop listening.
+     */
+    onCursorMove: IEvent<void>;
+
+    /**
+     * Adds an event listener for when a data event fires. This happens for
+     * example when the user types or pastes into the terminal. The event value
+     * is whatever `string` results, in a typical setup, this should be passed
+     * on to the backing pty.
+     * @returns an `IDisposable` to stop listening.
+     */
+    onData: IEvent<string>;
+
+    /**
+     * Adds an event listener for a key is pressed. The event value contains the
+     * string that will be sent in the data event as well as the DOM event that
+     * triggered it.
+     * @returns an `IDisposable` to stop listening.
+     */
+    onKey: IEvent<{ key: string, domEvent: KeyboardEvent }>;
+
+    /**
+     * Adds an event listener for when a line feed is added.
+     * @returns an `IDisposable` to stop listening.
+     */
+    onLineFeed: IEvent<void>;
+
+    /**
+     * Adds an event listener for when a scroll occurs. The  event value is the
+     * new position of the viewport.
+     * @returns an `IDisposable` to stop listening.
+     */
+    onScroll: IEvent<number>;
+
+    /**
+     * Adds an event listener for when a selection change occurs.
+     * @returns an `IDisposable` to stop listening.
+     */
+    onSelectionChange: IEvent<void>;
+
+    /**
+     * Adds an event listener for when rows are rendered. The event value
+     * contains the start row and end rows of the rendered area (ranges from `0`
+     * to `Terminal.rows - 1`).
+     * @returns an `IDisposable` to stop listening.
+     */
+    onRender: IEvent<{ start: number, end: number }>;
+
+    /**
+     * Adds an event listener for when the terminal is resized. The event value
+     * contains the new size.
+     * @returns an `IDisposable` to stop listening.
+     */
+    onResize: IEvent<{ cols: number, rows: number }>;
+
+    /**
+     * Adds an event listener for when an OSC 0 or OSC 2 title change occurs.
+     * The event value is the new title.
+     * @returns an `IDisposable` to stop listening.
+     */
+    onTitleChange: IEvent<string>;
 
     /**
      * Unfocus the terminal.
@@ -367,54 +433,63 @@ declare module 'xterm' {
      * Registers an event listener.
      * @param type The type of the event.
      * @param listener The listener.
+     * @deprecated use `Terminal.onEvent(listener)` instead.
      */
     on(type: 'blur' | 'focus' | 'linefeed' | 'selection', listener: () => void): void;
     /**
      * Registers an event listener.
      * @param type The type of the event.
      * @param listener The listener.
+     * @deprecated use `Terminal.onEvent(listener)` instead.
      */
     on(type: 'data', listener: (...args: any[]) => void): void;
     /**
      * Registers an event listener.
      * @param type The type of the event.
      * @param listener The listener.
+     * @deprecated use `Terminal.onEvent(listener)` instead.
      */
     on(type: 'key', listener: (key: string, event: KeyboardEvent) => void): void;
     /**
      * Registers an event listener.
      * @param type The type of the event.
      * @param listener The listener.
+     * @deprecated use `Terminal.onEvent(listener)` instead.
      */
     on(type: 'keypress' | 'keydown', listener: (event: KeyboardEvent) => void): void;
     /**
      * Registers an event listener.
      * @param type The type of the event.
      * @param listener The listener.
+     * @deprecated use `Terminal.onEvent(listener)` instead.
      */
     on(type: 'refresh', listener: (data: {start: number, end: number}) => void): void;
     /**
      * Registers an event listener.
      * @param type The type of the event.
      * @param listener The listener.
+     * @deprecated use `Terminal.onEvent(listener)` instead.
      */
     on(type: 'resize', listener: (data: {cols: number, rows: number}) => void): void;
     /**
      * Registers an event listener.
      * @param type The type of the event.
      * @param listener The listener.
+     * @deprecated use `Terminal.onEvent(listener)` instead.
      */
     on(type: 'scroll', listener: (ydisp: number) => void): void;
     /**
      * Registers an event listener.
      * @param type The type of the event.
      * @param listener The listener.
+     * @deprecated use `Terminal.onEvent(listener)` instead.
      */
     on(type: 'title', listener: (title: string) => void): void;
     /**
      * Registers an event listener.
      * @param type The type of the event.
      * @param listener The listener.
+     * @deprecated use `Terminal.onEvent(listener)` instead.
      */
     on(type: string, listener: (...args: any[]) => void): void;
 
@@ -422,6 +497,7 @@ declare module 'xterm' {
      * Deregisters an event listener.
      * @param type The type of the event.
      * @param listener The listener.
+     * @deprecated use `Terminal.onEvent(listener).dispose()` instead.
      */
     off(type: 'blur' | 'focus' | 'linefeed' | 'selection' | 'data' | 'key' | 'keypress' | 'keydown' | 'refresh' | 'resize' | 'scroll' | 'title' | string, listener: (...args: any[]) => void): void;
 
@@ -439,6 +515,7 @@ declare module 'xterm' {
      * be used to conveniently remove the event listener.
      * @param type The type of event.
      * @param handler The event handler.
+     * @deprecated use `Terminal.onEvent(listener)` instead.
      */
     addDisposableListener(type: string, handler: (...args: any[]) => void): IDisposable;
 
@@ -450,12 +527,6 @@ declare module 'xterm' {
      * @param y The number of rows to resize to.
      */
     resize(columns: number, rows: number): void;
-
-    /**
-     * Writes text to the terminal, followed by a break line character (\n).
-     * @param data The text to write to the terminal.
-     */
-    writeln(data: string): void;
 
     /**
      * Opens the terminal within an element.
@@ -499,6 +570,7 @@ declare module 'xterm' {
      * @return An IDisposable you can call to remove this handler.
      */
     addOscHandler(ident: number, callback: (data: string) => boolean): IDisposable;
+
     /**
      * (EXPERIMENTAL) Registers a link matcher, allowing custom link patterns to
      * be matched and handled.
@@ -574,9 +646,22 @@ declare module 'xterm' {
     getSelection(): string;
 
     /**
+     * Gets the selection position or undefined if there is no selection.
+     */
+    getSelectionPosition(): ISelectionPosition | undefined;
+
+    /**
      * Clears the current terminal selection.
      */
     clearSelection(): void;
+
+    /**
+     * Selects text within the terminal.
+     * @param column The column the selection starts at..
+     * @param row The row the selection starts at.
+     * @param length The length of the selection.
+     */
+    select(column: number, row: number, length: number): void;
 
     /**
      * Selects all text within the terminal.
@@ -595,13 +680,6 @@ declare module 'xterm' {
      * active listeners.
      */
     dispose(): void;
-
-    /**
-     * Destroys the terminal and detaches it from the DOM.
-     *
-     * @deprecated Use dispose() instead.
-     */
-    destroy(): void;
 
     /**
      * Scroll the display of the terminal
@@ -643,6 +721,20 @@ declare module 'xterm' {
     write(data: string): void;
 
     /**
+     * Writes text to the terminal, followed by a break line character (\n).
+     * @param data The text to write to the terminal.
+     */
+    writeln(data: string): void;
+
+    /**
+     * Writes UTF8 data to the terminal.
+     * This has a slight performance advantage over the string based write method
+     * due to lesser data conversions needed on the way from the pty to xterm.js.
+     * @param data The data to write to the terminal.
+     */
+    writeUtf8(data: Uint8Array): void;
+
+    /**
      * Retrieves an option's value from the terminal.
      * @param key The option key.
      */
@@ -651,7 +743,7 @@ declare module 'xterm' {
      * Retrieves an option's value from the terminal.
      * @param key The option key.
      */
-    getOption(key: 'allowTransparency' | 'cancelEvents' | 'convertEol' | 'cursorBlink' | 'debug' | 'disableStdin' | 'enableBold' | 'macOptionIsMeta' | 'rightClickSelectsWord' | 'popOnBell' | 'screenKeys' | 'useFlowControl' | 'visualBell'): boolean;
+    getOption(key: 'allowTransparency' | 'cancelEvents' | 'convertEol' | 'cursorBlink' | 'debug' | 'disableStdin' | 'macOptionIsMeta' | 'rightClickSelectsWord' | 'popOnBell' | 'screenKeys' | 'useFlowControl' | 'visualBell' | 'windowsMode'): boolean;
     /**
      * Retrieves an option's value from the terminal.
      * @param key The option key.
@@ -702,7 +794,7 @@ declare module 'xterm' {
      * @param key The option key.
      * @param value The option value.
      */
-    setOption(key: 'allowTransparency' | 'cancelEvents' | 'convertEol' | 'cursorBlink' | 'debug' | 'disableStdin' | 'enableBold' | 'macOptionIsMeta' | 'popOnBell' | 'rightClickSelectsWord' | 'screenKeys' | 'useFlowControl' | 'visualBell', value: boolean): void;
+    setOption(key: 'allowTransparency' | 'cancelEvents' | 'convertEol' | 'cursorBlink' | 'debug' | 'disableStdin' | 'macOptionIsMeta' | 'popOnBell' | 'rightClickSelectsWord' | 'screenKeys' | 'useFlowControl' | 'visualBell' | 'windowsMode', value: boolean): void;
     /**
      * Sets an option on the terminal.
      * @param key The option key.
@@ -757,7 +849,133 @@ declare module 'xterm' {
      * Applies an addon to the Terminal prototype, making it available to all
      * newly created Terminals.
      * @param addon The addon to apply.
+     * @deprecated Use the new loadAddon API/addon format.
      */
     static applyAddon(addon: any): void;
+
+    /**
+     * (EXPERIMENTAL) Loads an addon into this instance of xterm.js.
+     * @param addon The addon to load.
+     */
+    loadAddon(addon: ITerminalAddon): void;
+  }
+
+  /**
+   * An addon that can provide additional functionality to the terminal.
+   */
+  export interface ITerminalAddon extends IDisposable {
+    /**
+     * (EXPERIMENTAL) This is called when the addon is activated within xterm.js.
+     */
+    activate(terminal: Terminal): void;
+  }
+
+  /**
+   * An object representing a selecrtion within the terminal.
+   */
+  interface ISelectionPosition {
+    /**
+     * The start column of the selection.
+     */
+    startColumn: number;
+
+    /**
+     * The start row of the selection.
+     */
+    startRow: number;
+
+    /**
+     * The end column of the selection.
+     */
+    endColumn: number;
+
+    /**
+     * The end row of the selection.
+     */
+    endRow: number;
+  }
+
+  interface IBuffer {
+    /**
+     * The y position of the cursor. This ranges between `0` (when the
+     * cursor is at baseY) and `Terminal.rows - 1` (when the cursor is on the
+     * last row).
+     */
+    readonly cursorY: number;
+
+    /**
+     * The x position of the cursor. This ranges between `0` (left side) and
+     * `Terminal.cols - 1` (right side).
+     */
+    readonly cursorX: number;
+
+    /**
+     * The line within the buffer where the top of the viewport is.
+     */
+    readonly viewportY: number;
+
+    /**
+     * The line within the buffer where the top of the bottom page is (when
+     * fully scrolled down);
+     */
+    readonly baseY: number;
+
+    /**
+     * The amount of lines in the buffer.
+     */
+    readonly length: number;
+
+    /**
+     * Gets a line from the buffer, or undefined if the line index does not exist.
+     *
+     * Note that the result of this function should be used immediately after calling as when the
+     * terminal updates it could lead to unexpected behavior.
+     *
+     * @param y The line index to get.
+     */
+    getLine(y: number): IBufferLine | undefined;
+  }
+
+  interface IBufferLine {
+    /**
+     * Whether the line is wrapped from the previous line.
+     */
+    readonly isWrapped: boolean;
+
+    /**
+     * Gets a cell from the line, or undefined if the line index does not exist.
+     *
+     * Note that the result of this function should be used immediately after calling as when the
+     * terminal updates it could lead to unexpected behavior.
+     *
+     * @param x The character index to get.
+     */
+    getCell(x: number): IBufferCell | undefined;
+
+    /**
+     * Gets the line as a string. Note that this is gets only the string for the line, not taking
+     * isWrapped into account.
+     *
+     * @param trimRight Whether to trim any whitespace at the right of the line.
+     * @param startColumn The column to start from (inclusive).
+     * @param endColumn The column to end at (exclusive).
+     */
+    translateToString(trimRight?: boolean, startColumn?: number, endColumn?: number): string;
+  }
+
+  interface IBufferCell {
+    /**
+     * The character within the cell.
+     */
+    readonly char: string;
+
+    /**
+     * The width of the character. Some examples:
+     *
+     * - This is `1` for most cells.
+     * - This is `2` for wide character like CJK glyphs.
+     * - This is `0` for cells immediately following cells with a width of `2`.
+     */
+    readonly width: number;
   }
 }

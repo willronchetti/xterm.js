@@ -4,12 +4,12 @@
  */
 
 import { assert } from 'chai';
-import { IMouseZoneManager, IMouseZone } from './ui/Types';
-import { ILinkMatcher, ITerminal, IBufferLine } from './Types';
+import { IMouseZoneManager, IMouseZone, ILinkMatcher, ITerminal } from './Types';
+import { IBufferLine } from 'core/Types';
 import { Linkifier } from './Linkifier';
-import { MockBuffer, MockTerminal, TestTerminal } from './ui/TestUtils.test';
-import { CircularList } from './common/CircularList';
-import { BufferLine } from './BufferLine';
+import { MockBuffer, MockTerminal, TestTerminal } from './TestUtils.test';
+import { CircularList } from 'common/CircularList';
+import { BufferLine, CellData } from 'core/buffer/BufferLine';
 
 class TestLinkifier extends Linkifier {
   constructor(terminal: ITerminal) {
@@ -53,7 +53,7 @@ describe('Linkifier', () => {
   function stringToRow(text: string): IBufferLine {
     const result = new BufferLine(text.length);
     for (let i = 0; i < text.length; i++) {
-      result.set(i, [0, text.charAt(i), 1, text.charCodeAt(i)]);
+      result.setCell(i, CellData.fromCharData([0, text.charAt(i), 1, text.charCodeAt(i)]));
     }
     return result;
   }
