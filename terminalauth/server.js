@@ -58,7 +58,7 @@ function startServer() {
   app.use(passport.session());
 
   app.use('/build', express.static(__dirname + '/../build'));
-  //app.use('/img', express.static(__dirname + '/img'));
+  app.use('/img', express.static(__dirname + '/img'));
 
   app.get('/loginfail',
     function(req, res) {
