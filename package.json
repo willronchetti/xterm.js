@@ -10,7 +10,7 @@
     "prepackage": "npm run build",
     "package": "webpack",
     "start": "node terminalauth/start",
-    "lint": "tslint 'src/**/*.ts' './demo/**/*.ts' './addons/**/*.ts'",
+    "lint": "tslint 'src/**/*.ts' './terminalauth/**/*.ts' './addons/**/*.ts'",
     "test": "npm run test-unit",
     "posttest": "npm run lint",
     "test-api": "mocha \"**/*.api.js\"",
