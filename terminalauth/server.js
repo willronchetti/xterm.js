@@ -30,7 +30,7 @@ function startServer() {
 
       // THE environmental variable NICETOKEN will be passed into the docker container
       // so this is what we check the password against
-      var a_nice_token = 'test'; //process.env.NICETOKEN;
+      var a_nice_token = process.env.NICETOKEN;
 	    if ( password == a_nice_token ) {
 	      // the generic user in the docker container is 'student'
 	      return cb(null, 'student');
