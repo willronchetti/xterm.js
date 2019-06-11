@@ -15,6 +15,8 @@ function startServer() {
     var app = express();
     expressWs(app);
 
+    app.use('/xterm.css', express.static(__dirname + '/../css/xterm.css'));
+
     // Configure the local strategy for use by Passport.
     //
     // The local strategy require a `verify` function which receives the credentials
