@@ -86,6 +86,12 @@ describe('Keyboard', () => {
     it('should return \\x1b[3;3~ for alt+delete', () => {
       assert.equal(testEvaluateKeyboardEvent({ altKey: true, keyCode: 46 }).key, '\x1b[3;3~');
     });
+    it('should return \\x1b\\r for alt+enter', () => {
+      assert.equal(testEvaluateKeyboardEvent({ altKey: true, keyCode: 13 }).key, '\x1b\r');
+    });
+    it('should return \\x1b\\x1b for alt+esc', () => {
+      assert.equal(testEvaluateKeyboardEvent({ altKey: true, keyCode: 27 }).key, '\x1b\x1b');
+    });
     it('should return \\x1b[5D for ctrl+left', () => {
       assert.equal(testEvaluateKeyboardEvent({ ctrlKey: true, keyCode: 37 }).key, '\x1b[1;5D'); // CSI 5 D
     });
@@ -108,6 +114,12 @@ describe('Keyboard', () => {
       it('should return \\x1b[5C for alt+right', () => {
         assert.equal(testEvaluateKeyboardEvent({ altKey: true, keyCode: 39 }, { isMac: false }).key, '\x1b[1;5C'); // CSI 5 C
       });
+      it('should return \\x1b[5D for alt+up', () => {
+        assert.equal(testEvaluateKeyboardEvent({ altKey: true, keyCode: 38 }, { isMac: false }).key, '\x1b[1;5A'); // CSI 5 D
+      });
+      it('should return \\x1b[5C for alt+down', () => {
+        assert.equal(testEvaluateKeyboardEvent({ altKey: true, keyCode: 40 }, { isMac: false }).key, '\x1b[1;5B'); // CSI 5 C
+      });
       it('should return \\x1ba for alt+a', () => {
         assert.equal(testEvaluateKeyboardEvent({ altKey: true, keyCode: 65 }, { isMac: false }).key, '\x1ba');
       });
@@ -120,14 +132,24 @@ describe('Keyboard', () => {
       it('should return \\x1bf for alt+right', () => {
         assert.equal(testEvaluateKeyboardEvent({ altKey: true, keyCode: 39 }, { isMac: true }).key, '\x1bf'); // CSI 5 C
       });
+      it('should return \\x1bb for alt+up', () => {
+        assert.equal(testEvaluateKeyboardEvent({ altKey: true, keyCode: 38 }, { isMac: true }).key, '\x1b[1;3A'); // CSI 5 D
+      });
+      it('should return \\x1bf for alt+down', () => {
+        assert.equal(testEvaluateKeyboardEvent({ altKey: true, keyCode: 40 }, { isMac: true }).key, '\x1b[1;3B'); // CSI 5 C
+      });
       it('should return undefined for alt+a', () => {
-        assert.strictEqual(testEvaluateKeyboardEvent({ altKey: true, keyCode: 65 }, { isMac: true }).key, undefined), { isMac: true };
+        assert.strictEqual(testEvaluateKeyboardEvent({ altKey: true, keyCode: 65 }, { isMac: true }).key, undefined);
       });
     });
 
     describe('with macOptionIsMeta', () => {
       it('should return \\x1ba for alt+a', () => {
         assert.equal(testEvaluateKeyboardEvent({ altKey: true, keyCode: 65 }, { isMac: true, macOptionIsMeta: true }).key, '\x1ba');
+      });
+
+      it('should return \\x1b\\x1b for alt+enter', () => {
+        assert.equal(testEvaluateKeyboardEvent({ altKey: true, keyCode: 13 }, { isMac: true, macOptionIsMeta: true }).key, '\x1b\r');
       });
     });
 

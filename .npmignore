@@ -6,6 +6,9 @@
 !*.js
 !*.json
 
+# Whitelist - css/
+!css/**/*.css
+
 # Whitelist - dist/
 !dist/**/*.js
 !dist/**/*.js.map
@@ -33,12 +36,12 @@
 !typings/*.d.ts
 
 # Blacklist - (normal behavior) these will override any whitelist
+*.d.ts.map
 *.test.ts
 *.test.d.ts
 *.test.js
 *.test.js.map
 lib/test/
-tslint.json
 webpack.config.js
 
 docs/

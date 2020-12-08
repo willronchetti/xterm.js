@@ -2,6 +2,8 @@
   "extends": "./tsconfig-base.json",
   "compilerOptions": {
     "composite": true,
-    "strict": true
+    "strict": true,
+    "declarationMap": true,
+    "experimentalDecorators": true
   }
 }

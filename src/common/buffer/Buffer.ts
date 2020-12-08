@@ -5,11 +5,15 @@
 
 import { CircularList, IInsertEvent } from 'common/CircularList';
 import { IBuffer, BufferIndex, IBufferStringIterator, IBufferStringIteratorResult } from 'common/buffer/Types';
-import { IBufferLine, ICellData, IAttributeData } from 'common/Types';
-import { BufferLine, CellData, NULL_CELL_CHAR, NULL_CELL_WIDTH, NULL_CELL_CODE, WHITESPACE_CELL_CHAR, WHITESPACE_CELL_WIDTH, WHITESPACE_CELL_CODE, CHAR_DATA_WIDTH_INDEX, CHAR_DATA_CHAR_INDEX, DEFAULT_ATTR_DATA } from 'common/buffer/BufferLine';
+import { IBufferLine, ICellData, IAttributeData, ICharset } from 'common/Types';
+import { BufferLine, DEFAULT_ATTR_DATA } from 'common/buffer/BufferLine';
+import { CellData } from 'common/buffer/CellData';
+import { NULL_CELL_CHAR, NULL_CELL_WIDTH, NULL_CELL_CODE, WHITESPACE_CELL_CHAR, WHITESPACE_CELL_WIDTH, WHITESPACE_CELL_CODE, CHAR_DATA_WIDTH_INDEX, CHAR_DATA_CHAR_INDEX } from 'common/buffer/Constants';
 import { reflowLargerApplyNewLayout, reflowLargerCreateNewLayout, reflowLargerGetLinesToRemove, reflowSmallerGetNewLineLengths, getWrappedLineTrimmedLength } from 'common/buffer/BufferReflow';
 import { Marker } from 'common/buffer/Marker';
 import { IOptionsService, IBufferService } from 'common/services/Services';
+import { DEFAULT_CHARSET } from 'common/data/Charsets';
+import { ExtendedAttrs } from 'common/buffer/AttributeData';
 
 export const MAX_BUFFER_SIZE = 4294967295; // 2^32 - 1
 
@@ -33,6 +37,7 @@ export class Buffer implements IBuffer {
   public savedY: number = 0;
   public savedX: number = 0;
   public savedCurAttrData = DEFAULT_ATTR_DATA.clone();
+  public savedCharset: ICharset | undefined = DEFAULT_CHARSET;
   public markers: Marker[] = [];
   private _nullCell: ICellData = CellData.fromCharData([0, NULL_CELL_CHAR, NULL_CELL_WIDTH, NULL_CELL_CODE]);
   private _whitespaceCell: ICellData = CellData.fromCharData([0, WHITESPACE_CELL_CHAR, WHITESPACE_CELL_WIDTH, WHITESPACE_CELL_CODE]);
@@ -56,9 +61,11 @@ export class Buffer implements IBuffer {
     if (attr) {
       this._nullCell.fg = attr.fg;
       this._nullCell.bg = attr.bg;
+      this._nullCell.extended = attr.extended;
     } else {
       this._nullCell.fg = 0;
       this._nullCell.bg = 0;
+      this._nullCell.extended = new ExtendedAttrs();
     }
     return this._nullCell;
   }
@@ -67,9 +74,11 @@ export class Buffer implements IBuffer {
     if (attr) {
       this._whitespaceCell.fg = attr.fg;
       this._whitespaceCell.bg = attr.bg;
+      this._whitespaceCell.extended = attr.extended;
     } else {
       this._whitespaceCell.fg = 0;
       this._whitespaceCell.bg = 0;
+      this._whitespaceCell.extended = new ExtendedAttrs();
     }
     return this._whitespaceCell;
   }
@@ -163,19 +172,25 @@ export class Buffer implements IBuffer {
       if (this._rows < newRows) {
         for (let y = this._rows; y < newRows; y++) {
           if (this.lines.length < newRows + this.ybase) {
-            if (this.ybase > 0 && this.lines.length <= this.ybase + this.y + addToY + 1) {
-              // There is room above the buffer and there are no empty elements below the line,
-              // scroll up
-              this.ybase--;
-              addToY++;
-              if (this.ydisp > 0) {
-                // Viewport is at the top of the buffer, must increase downwards
-                this.ydisp--;
-              }
-            } else {
-              // Add a blank line if there is no buffer left at the top to scroll to, or if there
-              // are blank lines after the cursor
+            if (this._optionsService.options.windowsMode) {
+              // Just add the new missing rows on Windows as conpty reprints the screen with it's
+              // view of the world. Once a line enters scrollback for conpty it remains there
               this.lines.push(new BufferLine(newCols, nullCell));
+            } else {
+              if (this.ybase > 0 && this.lines.length <= this.ybase + this.y + addToY + 1) {
+                // There is room above the buffer and there are no empty elements below the line,
+                // scroll up
+                this.ybase--;
+                addToY++;
+                if (this.ydisp > 0) {
+                  // Viewport is at the top of the buffer, must increase downwards
+                  this.ydisp--;
+                }
+              } else {
+                // Add a blank line if there is no buffer left at the top to scroll to, or if there
+                // are blank lines after the cursor
+                this.lines.push(new BufferLine(newCols, nullCell));
+              }
             }
           }
         }
@@ -203,6 +218,7 @@ export class Buffer implements IBuffer {
           this.lines.trimStart(amountToTrim);
           this.ybase = Math.max(this.ybase - amountToTrim, 0);
           this.ydisp = Math.max(this.ydisp - amountToTrim, 0);
+          this.savedY = Math.max(this.savedY - amountToTrim, 0);
         }
         this.lines.maxLength = newMaxLength;
       }
@@ -213,7 +229,6 @@ export class Buffer implements IBuffer {
       if (addToY) {
         this.y += addToY;
       }
-      this.savedY = Math.min(this.savedY, newRows - 1);
       this.savedX = Math.min(this.savedX, newCols - 1);
 
       this.scrollTop = 0;
@@ -282,6 +297,7 @@ export class Buffer implements IBuffer {
         this.ybase--;
       }
     }
+    this.savedY = Math.max(this.savedY - countRemoved, 0);
   }
 
   private _reflowSmaller(newCols: number, newRows: number): void {
@@ -393,6 +409,7 @@ export class Buffer implements IBuffer {
           }
         }
       }
+      this.savedY = Math.min(this.savedY + linesToAdd, this.ybase + newRows - 1);
     }
 
     // Rearrange lines in the buffer if there are any insertions, this is done at the end rather
@@ -649,11 +666,11 @@ export class BufferStringIterator implements IBufferStringIterator {
     // limit to current buffer length
     range.first = Math.max(range.first, 0);
     range.last = Math.min(range.last, this._buffer.lines.length);
-    let result = '';
+    let content = '';
     for (let i = range.first; i <= range.last; ++i) {
-      result += this._buffer.translateBufferLineToString(i, this._trimRight);
+      content += this._buffer.translateBufferLineToString(i, this._trimRight);
     }
     this._current = range.last + 1;
-    return {range: range, content: result};
+    return {range, content};
   }
 }

@@ -4,6 +4,8 @@ node_modules/
 .lock-wscript
 lib/
 out/
+out-test/
+.nyc_output/
 Makefile.gyp
 *.Makefile
 *.target.gyp.mk
@@ -15,8 +17,12 @@ npm-debug.log
 .env
 build/
 .DS_Store
-package-lock.json
+addons/xterm-addon-ligatures/package-lock.json
 
 # Keep bundled code out of Git
 dist/
 demo/dist/
+
+# dont commit benchmark folders
+.benchmark/
+timeline/

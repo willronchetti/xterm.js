@@ -17,6 +17,9 @@ interface ITerminalDimensions {
   cols: number;
 }
 
+const MINIMUM_COLS = 2;
+const MINIMUM_ROWS = 1;
+
 export class FitAddon implements ITerminalAddon {
   private _terminal: Terminal | undefined;
 
@@ -35,7 +38,7 @@ export class FitAddon implements ITerminalAddon {
     }
 
     // TODO: Remove reliance on private API
-    const core = (<any>this._terminal)._core;
+    const core = (this._terminal as any)._core;
 
     // Force a full render
     if (this._terminal.rows !== dims.rows || this._terminal.cols !== dims.cols) {
@@ -49,12 +52,16 @@ export class FitAddon implements ITerminalAddon {
       return undefined;
     }
 
-    if (!this._terminal.element.parentElement) {
+    if (!this._terminal.element || !this._terminal.element.parentElement) {
       return undefined;
     }
 
     // TODO: Remove reliance on private API
-    const core = (<any>this._terminal)._core;
+    const core = (this._terminal as any)._core;
+
+    if (core._renderService.dimensions.actualCellWidth === 0 || core._renderService.dimensions.actualCellHeight === 0) {
+      return undefined;
+    }
 
     const parentElementStyle = window.getComputedStyle(this._terminal.element.parentElement);
     const parentElementHeight = parseInt(parentElementStyle.getPropertyValue('height'));
@@ -71,8 +78,8 @@ export class FitAddon implements ITerminalAddon {
     const availableHeight = parentElementHeight - elementPaddingVer;
     const availableWidth = parentElementWidth - elementPaddingHor - core.viewport.scrollBarWidth;
     const geometry = {
-      cols: Math.floor(availableWidth / core._renderService.dimensions.actualCellWidth),
-      rows: Math.floor(availableHeight / core._renderService.dimensions.actualCellHeight)
+      cols: Math.max(MINIMUM_COLS, Math.floor(availableWidth / core._renderService.dimensions.actualCellWidth)),
+      rows: Math.max(MINIMUM_ROWS, Math.floor(availableHeight / core._renderService.dimensions.actualCellHeight))
     };
     return geometry;
   }

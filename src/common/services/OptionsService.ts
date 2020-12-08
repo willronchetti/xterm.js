@@ -3,7 +3,7 @@
  * @license MIT
  */
 
-import { IOptionsService, ITerminalOptions, IPartialTerminalOptions } from 'common/services/Services';
+import { IOptionsService, ITerminalOptions, IPartialTerminalOptions, FontWeight } from 'common/services/Services';
 import { EventEmitter, IEvent } from 'common/EventEmitter';
 import { isMac } from 'common/Platform';
 import { clone } from 'common/Clone';
@@ -12,7 +12,7 @@ import { clone } from 'common/Clone';
 // This sound is released under the Creative Commons Attribution 3.0 Unported
 // (CC BY 3.0) license. It was created by 'altemark'. No modifications have been
 // made, apart from the conversion to base64.
-export const DEFAULT_BELL_SOUND = 'data:audio/wav;base64,UklGRigBAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQBAADpAFgCwAMlBZoG/wdmCcoKRAypDQ8PbRDBEQQTOxRtFYcWlBePGIUZXhoiG88bcBz7HHIdzh0WHlMeZx51HmkeUx4WHs8dah0AHXwc3hs9G4saxRnyGBIYGBcQFv8U4RPAEoYRQBACD70NWwwHC6gJOwjWBloF7gOBAhABkf8b/qv8R/ve+Xf4Ife79W/0JfPZ8Z/wde9N7ijtE+wU6xvqM+lb6H7nw+YX5mrlxuQz5Mzje+Ma49fioeKD4nXiYeJy4pHitOL04j/jn+MN5IPkFOWs5U3mDefM55/ogOl36m7rdOyE7abuyu8D8Unyj/Pg9D/2qfcb+Yn6/vuK/Qj/lAAlAg==';
+export const DEFAULT_BELL_SOUND = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjMyLjEwNAAAAAAAAAAAAAAA//tQxAADB8AhSmxhIIEVCSiJrDCQBTcu3UrAIwUdkRgQbFAZC1CQEwTJ9mjRvBA4UOLD8nKVOWfh+UlK3z/177OXrfOdKl7pyn3Xf//WreyTRUoAWgBgkOAGbZHBgG1OF6zM82DWbZaUmMBptgQhGjsyYqc9ae9XFz280948NMBWInljyzsNRFLPWdnZGWrddDsjK1unuSrVN9jJsK8KuQtQCtMBjCEtImISdNKJOopIpBFpNSMbIHCSRpRR5iakjTiyzLhchUUBwCgyKiweBv/7UsQbg8isVNoMPMjAAAA0gAAABEVFGmgqK////9bP/6XCykxBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq';
 
 // TODO: Freeze?
 export const DEFAULT_OPTIONS: ITerminalOptions = Object.freeze({
@@ -20,34 +20,43 @@ export const DEFAULT_OPTIONS: ITerminalOptions = Object.freeze({
   rows: 24,
   cursorBlink: false,
   cursorStyle: 'block',
+  cursorWidth: 1,
   bellSound:  DEFAULT_BELL_SOUND,
   bellStyle: 'none',
   drawBoldTextInBrightColors: true,
+  fastScrollModifier: 'alt',
+  fastScrollSensitivity: 5,
   fontFamily: 'courier-new, courier, monospace',
   fontSize: 15,
   fontWeight: 'normal',
   fontWeightBold: 'bold',
   lineHeight: 1.0,
+  linkTooltipHoverDuration: 500,
   letterSpacing: 0,
+  logLevel: 'info',
   scrollback: 1000,
+  scrollSensitivity: 1,
   screenReaderMode: false,
   macOptionIsMeta: false,
   macOptionClickForcesSelection: false,
+  minimumContrastRatio: 1,
   disableStdin: false,
+  allowProposedApi: true,
   allowTransparency: false,
   tabStopWidth: 8,
   theme: {},
   rightClickSelectsWord: isMac,
   rendererType: 'canvas',
+  windowOptions: {},
   windowsMode: false,
-
+  wordSeparator: ' ()[]{}\',"`',
+  altClickMovesCursor: true,
   convertEol: false,
   termName: 'xterm',
-  screenKeys: false,
-  debug: false,
-  cancelEvents: false,
-  useFlowControl: false
+  cancelEvents: false
 });
+
+const FONT_WEIGHT_OPTIONS: Extract<FontWeight, string>[] = ['normal', 'bold', '100', '200', '300', '400', '500', '600', '700', '800', '900'];
 
 /**
  * The set of options that only have an effect when set in the Terminal constructor.
@@ -55,6 +64,8 @@ export const DEFAULT_OPTIONS: ITerminalOptions = Object.freeze({
 const CONSTRUCTOR_ONLY_OPTIONS = ['cols', 'rows'];
 
 export class OptionsService implements IOptionsService {
+  public serviceBrand: any;
+
   public options: ITerminalOptions;
 
   private _onOptionChange = new EventEmitter<string>();
@@ -62,19 +73,23 @@ export class OptionsService implements IOptionsService {
 
   constructor(options: IPartialTerminalOptions) {
     this.options = clone(DEFAULT_OPTIONS);
-    Object.keys(options).forEach(k => {
+    for (const k of Object.keys(options)) {
       if (k in this.options) {
-        const newValue = options[k as keyof IPartialTerminalOptions] as any;
-        this.options[k] = newValue;
+        try {
+          const newValue = options[k as keyof IPartialTerminalOptions] as any;
+          this.options[k] = this._sanitizeAndValidateOption(k, newValue);
+        } catch (e) {
+          console.error(e);
+        }
       }
-    });
+    }
   }
 
   public setOption(key: string, value: any): void {
     if (!(key in DEFAULT_OPTIONS)) {
       throw new Error('No option with key "' + key + '"');
     }
-    if (CONSTRUCTOR_ONLY_OPTIONS.indexOf(key) !== -1) {
+    if (CONSTRUCTOR_ONLY_OPTIONS.includes(key)) {
       throw new Error(`Option "${key}" can only be set in the constructor`);
     }
     if (this.options[key] === value) {
@@ -96,23 +111,42 @@ export class OptionsService implements IOptionsService {
     switch (key) {
       case 'bellStyle':
       case 'cursorStyle':
-      case 'fontWeight':
-      case 'fontWeightBold':
       case 'rendererType':
+      case 'wordSeparator':
         if (!value) {
           value = DEFAULT_OPTIONS[key];
         }
         break;
+      case 'fontWeight':
+      case 'fontWeightBold':
+        if (typeof value === 'number' && 1 <= value && value <= 1000) {
+          // already valid numeric value
+          break;
+        }
+        value = FONT_WEIGHT_OPTIONS.includes(value) ? value : DEFAULT_OPTIONS[key];
+        break;
+      case 'cursorWidth':
+        value = Math.floor(value);
+        // Fall through for bounds check
       case 'lineHeight':
       case 'tabStopWidth':
         if (value < 1) {
           throw new Error(`${key} cannot be less than 1, value: ${value}`);
         }
         break;
+      case 'minimumContrastRatio':
+        value = Math.max(1, Math.min(21, Math.round(value * 10) / 10));
+        break;
       case 'scrollback':
         value = Math.min(value, 4294967295);
         if (value < 0) {
           throw new Error(`${key} cannot be less than 0, value: ${value}`);
+        }
+        break;
+      case 'fastScrollSensitivity':
+      case 'scrollSensitivity':
+        if (value <= 0) {
+          throw new Error(`${key} cannot be less than or equal to 0, value: ${value}`);
         }
         break;
     }

@@ -7,10 +7,10 @@ Xterm.js is a front-end component written in TypeScript that lets applications b
 ## Features
 
 - **Terminal apps just work**: Xterm.js works with most terminal apps such as `bash`, `vim` and `tmux`, this includes support for curses-based apps and mouse event support.
-- **Perfomant**: Xterm.js is *really* fast, it even includes a GPU-accelerated renderer.
+- **Performant**: Xterm.js is *really* fast, it even includes a GPU-accelerated renderer.
 - **Rich unicode support**: Supports CJK, emojis and IMEs.
 - **Self-contained**: Requires zero dependencies to work.
-- **Accessible**: Screen reader support can be turned on using the `screenReaderMode` option.
+- **Accessible**: Screen reader and minimum contrast ratio support can be turned on
 - **And much more**: Links, theming, addons, well documented API, etc.
 
 ## What xterm.js is not
@@ -32,8 +32,8 @@ To start using xterm.js on your browser, add the `xterm.js` and `xterm.css` to t
 <!doctype html>
   <html>
     <head>
-      <link rel="stylesheet" href="node_modules/xterm/dist/xterm.css" />
-      <script src="node_modules/xterm/dist/xterm.js"></script>
+      <link rel="stylesheet" href="node_modules/xterm/css/xterm.css" />
+      <script src="node_modules/xterm/lib/xterm.js"></script>
     </head>
     <body>
       <div id="terminal"></div>
@@ -87,7 +87,7 @@ The xterm.js team maintains the following addons but they can be built by anyone
 
 Since xterm.js is typically implemented as a developer tool, only modern browsers are supported officially. Specifically the latest versions of *Chrome*, *Edge*, *Firefox* and *Safari*.
 
-We also partially support *Intenet Explorer 11*, meaning xterm.js should work for the most part, but we reserve the right to not provide workarounds specifically for it unless it's absolutely necessary to get the basic input/output flow working.
+We also partially support *Internet Explorer 11*, meaning xterm.js should work for the most part, but we reserve the right to not provide workarounds specifically for it unless it's absolutely necessary to get the basic input/output flow working.
 
 Xterm.js works seamlessly in [Electron](https://electronjs.org/) apps and may even work on earlier versions of the browsers, these are the versions we strive to keep working.
 
@@ -110,7 +110,7 @@ Xterm.js is used in several world-class applications to provide great terminal e
 - [**WebSSH2**](https://github.com/billchurch/WebSSH2): A web based SSH2 client using xterm.js, socket.io, and ssh2.
 - [**Spyder Terminal**](https://github.com/spyder-ide/spyder-terminal): A full fledged system terminal embedded on Spyder IDE.
 - [**Cloud Commander**](https://cloudcmd.io "Cloud Commander"): Orthodox web file manager with console and editor.
-- [**Codevolve**](https://www.codevolve.com "Codevolve"): Online platform for interactive coding and web development courses. Live container-backed terminal uses xterm.js.
+- [**Next Tech**](https://next.tech "Next Tech"): Online platform for interactive coding and web development courses. Live container-backed terminal uses xterm.js.
 - [**RStudio**](https://www.rstudio.com/products/RStudio "RStudio"): RStudio is an integrated development environment (IDE) for R.
 - [**Terminal for Atom**](https://github.com/jsmecham/atom-terminal-tab): A simple terminal for the Atom text editor.
 - [**Eclipse Orion**](https://orionhub.org): A modern, open source software development environment that runs in the cloud. Code, deploy and run in the cloud.
@@ -152,7 +152,23 @@ Xterm.js is used in several world-class applications to provide great terminal e
 - [**CodeInterview.io**](https://codeinterview.io): A coding interview platform in 25+ languages and many web frameworks. Uses xterm.js to provide shell access.
 - [**Bastillion**](https://www.bastillion.io): Bastillion is an open-source web-based SSH console that centrally manages administrative access to systems.
 - [**PHP App Server**](https://github.com/cubiclesoft/php-app-server/): Create lightweight, installable almost-native applications for desktop OSes.  ExecTerminal (nicely wraps the xterm.js Terminal), TerminalManager, and RunProcessSDK are self-contained, reusable ES5+ compliant Javascript components.
-
+- [**NgTerminal**](https://github.com/qwefgh90/ng-terminal): NgTerminal is a web terminal that leverages xterm.js on Angular 7+. You can easily add it into your application by adding `<ng-terminal></ng-terminal>` into your component.
+- [**tty-share**](https://tty-share.com): Extremely simple terminal sharing over the Internet.
+- [**Ten Hands**](https://github.com/saisandeepvaddi/ten-hands): One place to run your command-line tasks.
+- [**WebAssembly.sh**](https://webassembly.sh): A WebAssembly WASI browser terminal
+- [**Gus**](https://gus.jp): A shared coding pad where you can run Python with xterm.js
+- [**Linode**](https://linode.com): Linode uses xterm.js to provide users a web console for their Linode instances.
+- [**FluffOS**](https://www.fluffos.info): Active maintained LPMUD driver with websocket support.
+- [**x-terminal**](https://atom.io/packages/x-terminal): Atom plugin for providing terminals inside your Atom workspace.
+- [**CoCalc**](https://cocalc.com/): Lots of free software pre-installed, to chat, collaborate, develop, program, publish, research, share, teach, in C++, HTML, Julia, Jupyter, LaTeX, Markdown, Python, R, SageMath, Scala, ...
+- [**Dank Domain**](https://www.DDgame.us/): Open source multiuser medieval game supporting old & new terminal emulation.
+- [**DockerStacks**](https://docker-stacks.com/): Local LAMP/LEMP development studio
+- [**Codecademy**](https://codecademy.com/): Uses xterm.js in its courses on Bash. 
+- [**Laravel Ssh Web Client**](https://github.com/roke22/Laravel-ssh-client): Laravel server inventory with ssh web client to connect at server using xterm.js
+- [**Repl.it**](https://repl.it): Collaborative browser based IDE with support for 50+ different languages.
+- [**TeleType**](https://github.com/akshaykmr/TeleType): cli tool that allows you to share your terminal online conveniently. Show off mad cli-fu, help a colleague, teach, or troubleshoot.
+- [**Intervue**](https://www.intervue.io): Pair programming for interviews. Multiple programming languages supported, with results displayed by xterm.js.
+- [**TRASA**](https://trasa.io): Zero trust access to Web, SSH, RDP and Database services.  
 [And much more...](https://github.com/xtermjs/xterm.js/network/dependents)
 
 Do you use xterm.js in your application as well? Please [open a Pull Request](https://github.com/sourcelair/xterm.js/pulls) to include it here. We would love to have it in our list. Note: Please add any new contributions to the end of the list only.

@@ -3,18 +3,14 @@
  * @license MIT
  */
 
-import { ParserState, ParserAction, IParsingState, IDcsHandler, IEscapeSequenceParser } from 'common/parser/Types';
+import { IParsingState, IDcsHandler, IEscapeSequenceParser, IParams, IOscHandler, IHandlerCollection, CsiHandlerType, OscFallbackHandlerType, IOscParser, EscHandlerType, IDcsParser, DcsFallbackHandlerType, IFunctionIdentifier, ExecuteFallbackHandlerType, CsiFallbackHandlerType, EscFallbackHandlerType, PrintHandlerType, PrintFallbackHandlerType, ExecuteHandlerType } from 'common/parser/Types';
+import { ParserState, ParserAction } from 'common/parser/Constants';
 import { Disposable } from 'common/Lifecycle';
-import { utf32ToString } from 'common/input/TextDecoder';
 import { IDisposable } from 'common/Types';
 import { fill } from 'common/TypedArrayUtils';
-
-interface IHandlerCollection<T> {
-  [key: string]: T[];
-}
-
-type CsiHandler = (params: number[], collect: string) => boolean | void;
-type OscHandler = (data: string) => boolean | void;
+import { Params } from 'common/parser/Params';
+import { OscParser } from 'common/parser/OscParser';
+import { DcsParser } from 'common/parser/DcsParser';
 
 /**
  * Table values are generated like this:
@@ -86,7 +82,7 @@ export const VT500_TRANSITION_TABLE = (function (): TransitionTable {
   // range macro for byte
   const BYTE_VALUES = 256;
   const blueprint = Array.apply(null, Array(BYTE_VALUES)).map((unused: any, i: number) => i);
-  const r = (start: number, end: number) => blueprint.slice(start, end);
+  const r = (start: number, end: number): number[] => blueprint.slice(start, end);
 
   // Default definitions.
   const PRINTABLES = r(0x20, 0x7f); // 0x20 (SP) included, 0x7F (DEL) excluded
@@ -142,17 +138,14 @@ export const VT500_TRANSITION_TABLE = (function (): TransitionTable {
   // csi entries
   table.add(0x5b, ParserState.ESCAPE, ParserAction.CLEAR, ParserState.CSI_ENTRY);
   table.addMany(r(0x40, 0x7f), ParserState.CSI_ENTRY, ParserAction.CSI_DISPATCH, ParserState.GROUND);
-  table.addMany(r(0x30, 0x3a), ParserState.CSI_ENTRY, ParserAction.PARAM, ParserState.CSI_PARAM);
-  table.add(0x3b, ParserState.CSI_ENTRY, ParserAction.PARAM, ParserState.CSI_PARAM);
+  table.addMany(r(0x30, 0x3c), ParserState.CSI_ENTRY, ParserAction.PARAM, ParserState.CSI_PARAM);
   table.addMany([0x3c, 0x3d, 0x3e, 0x3f], ParserState.CSI_ENTRY, ParserAction.COLLECT, ParserState.CSI_PARAM);
-  table.addMany(r(0x30, 0x3a), ParserState.CSI_PARAM, ParserAction.PARAM, ParserState.CSI_PARAM);
-  table.add(0x3b, ParserState.CSI_PARAM, ParserAction.PARAM, ParserState.CSI_PARAM);
+  table.addMany(r(0x30, 0x3c), ParserState.CSI_PARAM, ParserAction.PARAM, ParserState.CSI_PARAM);
   table.addMany(r(0x40, 0x7f), ParserState.CSI_PARAM, ParserAction.CSI_DISPATCH, ParserState.GROUND);
-  table.addMany([0x3a, 0x3c, 0x3d, 0x3e, 0x3f], ParserState.CSI_PARAM, ParserAction.IGNORE, ParserState.CSI_IGNORE);
+  table.addMany([0x3c, 0x3d, 0x3e, 0x3f], ParserState.CSI_PARAM, ParserAction.IGNORE, ParserState.CSI_IGNORE);
   table.addMany(r(0x20, 0x40), ParserState.CSI_IGNORE, ParserAction.IGNORE, ParserState.CSI_IGNORE);
   table.add(0x7f, ParserState.CSI_IGNORE, ParserAction.IGNORE, ParserState.CSI_IGNORE);
   table.addMany(r(0x40, 0x7f), ParserState.CSI_IGNORE, ParserAction.IGNORE, ParserState.GROUND);
-  table.add(0x3a, ParserState.CSI_ENTRY, ParserAction.IGNORE, ParserState.CSI_IGNORE);
   table.addMany(r(0x20, 0x30), ParserState.CSI_ENTRY, ParserAction.COLLECT, ParserState.CSI_INTERMEDIATE);
   table.addMany(r(0x20, 0x30), ParserState.CSI_INTERMEDIATE, ParserAction.COLLECT, ParserState.CSI_INTERMEDIATE);
   table.addMany(r(0x30, 0x40), ParserState.CSI_INTERMEDIATE, ParserAction.IGNORE, ParserState.CSI_IGNORE);
@@ -172,9 +165,7 @@ export const VT500_TRANSITION_TABLE = (function (): TransitionTable {
   table.add(0x7f, ParserState.DCS_ENTRY, ParserAction.IGNORE, ParserState.DCS_ENTRY);
   table.addMany(r(0x1c, 0x20), ParserState.DCS_ENTRY, ParserAction.IGNORE, ParserState.DCS_ENTRY);
   table.addMany(r(0x20, 0x30), ParserState.DCS_ENTRY, ParserAction.COLLECT, ParserState.DCS_INTERMEDIATE);
-  table.add(0x3a, ParserState.DCS_ENTRY, ParserAction.IGNORE, ParserState.DCS_IGNORE);
-  table.addMany(r(0x30, 0x3a), ParserState.DCS_ENTRY, ParserAction.PARAM, ParserState.DCS_PARAM);
-  table.add(0x3b, ParserState.DCS_ENTRY, ParserAction.PARAM, ParserState.DCS_PARAM);
+  table.addMany(r(0x30, 0x3c), ParserState.DCS_ENTRY, ParserAction.PARAM, ParserState.DCS_PARAM);
   table.addMany([0x3c, 0x3d, 0x3e, 0x3f], ParserState.DCS_ENTRY, ParserAction.COLLECT, ParserState.DCS_PARAM);
   table.addMany(EXECUTABLES, ParserState.DCS_IGNORE, ParserAction.IGNORE, ParserState.DCS_IGNORE);
   table.addMany(r(0x20, 0x80), ParserState.DCS_IGNORE, ParserAction.IGNORE, ParserState.DCS_IGNORE);
@@ -182,9 +173,8 @@ export const VT500_TRANSITION_TABLE = (function (): TransitionTable {
   table.addMany(EXECUTABLES, ParserState.DCS_PARAM, ParserAction.IGNORE, ParserState.DCS_PARAM);
   table.add(0x7f, ParserState.DCS_PARAM, ParserAction.IGNORE, ParserState.DCS_PARAM);
   table.addMany(r(0x1c, 0x20), ParserState.DCS_PARAM, ParserAction.IGNORE, ParserState.DCS_PARAM);
-  table.addMany(r(0x30, 0x3a), ParserState.DCS_PARAM, ParserAction.PARAM, ParserState.DCS_PARAM);
-  table.add(0x3b, ParserState.DCS_PARAM, ParserAction.PARAM, ParserState.DCS_PARAM);
-  table.addMany([0x3a, 0x3c, 0x3d, 0x3e, 0x3f], ParserState.DCS_PARAM, ParserAction.IGNORE, ParserState.DCS_IGNORE);
+  table.addMany(r(0x30, 0x3c), ParserState.DCS_PARAM, ParserAction.PARAM, ParserState.DCS_PARAM);
+  table.addMany([0x3c, 0x3d, 0x3e, 0x3f], ParserState.DCS_PARAM, ParserAction.IGNORE, ParserState.DCS_IGNORE);
   table.addMany(r(0x20, 0x30), ParserState.DCS_PARAM, ParserAction.COLLECT, ParserState.DCS_INTERMEDIATE);
   table.addMany(EXECUTABLES, ParserState.DCS_INTERMEDIATE, ParserAction.IGNORE, ParserState.DCS_INTERMEDIATE);
   table.add(0x7f, ParserState.DCS_INTERMEDIATE, ParserAction.IGNORE, ParserState.DCS_INTERMEDIATE);
@@ -197,7 +187,7 @@ export const VT500_TRANSITION_TABLE = (function (): TransitionTable {
   table.addMany(EXECUTABLES, ParserState.DCS_PASSTHROUGH, ParserAction.DCS_PUT, ParserState.DCS_PASSTHROUGH);
   table.addMany(PRINTABLES, ParserState.DCS_PASSTHROUGH, ParserAction.DCS_PUT, ParserState.DCS_PASSTHROUGH);
   table.add(0x7f, ParserState.DCS_PASSTHROUGH, ParserAction.IGNORE, ParserState.DCS_PASSTHROUGH);
-  table.addMany([0x1b, 0x9c], ParserState.DCS_PASSTHROUGH, ParserAction.DCS_UNHOOK, ParserState.GROUND);
+  table.addMany([0x1b, 0x9c, 0x18, 0x1a], ParserState.DCS_PASSTHROUGH, ParserAction.DCS_UNHOOK, ParserState.GROUND);
   // special handling of unicode chars
   table.add(NON_ASCII_PRINTABLE, ParserState.GROUND, ParserAction.PRINT, ParserState.GROUND);
   table.add(NON_ASCII_PRINTABLE, ParserState.OSC_STRING, ParserAction.OSC_PUT, ParserState.OSC_STRING);
@@ -207,25 +197,35 @@ export const VT500_TRANSITION_TABLE = (function (): TransitionTable {
   return table;
 })();
 
-/**
- * Dummy DCS handler as default fallback.
- */
-class DcsDummy implements IDcsHandler {
-  hook(collect: string, params: number[], flag: number): void { }
-  put(data: Uint32Array, start: number, end: number): void { }
-  unhook(): void { }
-}
 
 /**
  * EscapeSequenceParser.
  * This class implements the ANSI/DEC compatible parser described by
  * Paul Williams (https://vt100.net/emu/dec_ansi_parser).
+ *
  * To implement custom ANSI compliant escape sequences it is not needed to
  * alter this parser, instead consider registering a custom handler.
  * For non ANSI compliant sequences change the transition table with
- * the optional `transitions` contructor argument and
+ * the optional `transitions` constructor argument and
  * reimplement the `parse` method.
- * NOTE: The parameter element notation is currently not supported.
+ *
+ * This parser is currently hardcoded to operate in ZDM (Zero Default Mode)
+ * as suggested by the original parser, thus empty parameters are set to 0.
+ * This this is not in line with the latest ECMA-48 specification
+ * (ZDM was part of the early specs and got completely removed later on).
+ *
+ * Other than the original parser from vt100.net this parser supports
+ * sub parameters in digital parameters separated by colons. Empty sub parameters
+ * are set to -1 (no ZDM for sub parameters).
+ *
+ * About prefix and intermediate bytes:
+ * This parser follows the assumptions of the vt100.net parser with these restrictions:
+ * - only one prefix byte is allowed as first parameter byte, byte range 0x3c .. 0x3f
+ * - max. two intermediates are respected, byte range 0x20 .. 0x2f
+ * Note that this is not in line with ECMA-48 which does not limit either of those.
+ * Furthermore ECMA-48 allows the prefix byte range at any param byte position. Currently
+ * there are no known sequences that follow the broader definition of the specification.
+ *
  * TODO: implement error recovery hook via error handler return values
  */
 export class EscapeSequenceParser extends Disposable implements IEscapeSequenceParser {
@@ -234,193 +234,246 @@ export class EscapeSequenceParser extends Disposable implements IEscapeSequenceP
   public precedingCodepoint: number;
 
   // buffers over several parse calls
-  protected _osc: string;
-  protected _params: number[];
-  protected _collect: string;
+  protected _params: Params;
+  protected _collect: number;
 
   // handler lookup containers
-  protected _printHandler: (data: Uint32Array, start: number, end: number) => void;
-  protected _executeHandlers: any;
-  protected _csiHandlers: IHandlerCollection<CsiHandler>;
-  protected _escHandlers: any;
-  protected _oscHandlers: IHandlerCollection<OscHandler>;
-  protected _dcsHandlers: any;
-  protected _activeDcsHandler: IDcsHandler | null;
+  protected _printHandler: PrintHandlerType;
+  protected _executeHandlers: {[flag: number]: ExecuteHandlerType};
+  protected _csiHandlers: IHandlerCollection<CsiHandlerType>;
+  protected _escHandlers: IHandlerCollection<EscHandlerType>;
+  protected _oscParser: IOscParser;
+  protected _dcsParser: IDcsParser;
   protected _errorHandler: (state: IParsingState) => IParsingState;
 
   // fallback handlers
-  protected _printHandlerFb: (data: Uint32Array, start: number, end: number) => void;
-  protected _executeHandlerFb: (code: number) => void;
-  protected _csiHandlerFb: (collect: string, params: number[], flag: number) => void;
-  protected _escHandlerFb: (collect: string, flag: number) => void;
-  protected _oscHandlerFb: (identifier: number, data: string) => void;
-  protected _dcsHandlerFb: IDcsHandler;
+  protected _printHandlerFb: PrintFallbackHandlerType;
+  protected _executeHandlerFb: ExecuteFallbackHandlerType;
+  protected _csiHandlerFb: CsiFallbackHandlerType;
+  protected _escHandlerFb: EscFallbackHandlerType;
   protected _errorHandlerFb: (state: IParsingState) => IParsingState;
 
-  constructor(readonly TRANSITIONS: TransitionTable = VT500_TRANSITION_TABLE) {
+  constructor(
+    protected readonly _transitions: TransitionTable = VT500_TRANSITION_TABLE
+  ) {
     super();
 
     this.initialState = ParserState.GROUND;
     this.currentState = this.initialState;
-    this._osc = '';
-    this._params = [0];
-    this._collect = '';
+    this._params = new Params(); // defaults to 32 storable params/subparams
+    this._params.addParam(0);    // ZDM
+    this._collect = 0;
     this.precedingCodepoint = 0;
 
     // set default fallback handlers and handler lookup containers
     this._printHandlerFb = (data, start, end): void => { };
     this._executeHandlerFb = (code: number): void => { };
-    this._csiHandlerFb = (collect: string, params: number[], flag: number): void => { };
-    this._escHandlerFb = (collect: string, flag: number): void => { };
-    this._oscHandlerFb = (identifier: number, data: string): void => { };
-    this._dcsHandlerFb = new DcsDummy();
+    this._csiHandlerFb = (ident: number, params: IParams): void => { };
+    this._escHandlerFb = (ident: number): void => { };
     this._errorHandlerFb = (state: IParsingState): IParsingState => state;
     this._printHandler = this._printHandlerFb;
     this._executeHandlers = Object.create(null);
     this._csiHandlers = Object.create(null);
     this._escHandlers = Object.create(null);
-    this._oscHandlers = Object.create(null);
-    this._dcsHandlers = Object.create(null);
-    this._activeDcsHandler = null;
+    this._oscParser = new OscParser();
+    this._dcsParser = new DcsParser();
     this._errorHandler = this._errorHandlerFb;
 
     // swallow 7bit ST (ESC+\)
-    this.setEscHandler('\\', () => {});
+    this.setEscHandler({final: '\\'}, () => {});
+  }
+
+  protected _identifier(id: IFunctionIdentifier, finalRange: number[] = [0x40, 0x7e]): number {
+    let res = 0;
+    if (id.prefix) {
+      if (id.prefix.length > 1) {
+        throw new Error('only one byte as prefix supported');
+      }
+      res = id.prefix.charCodeAt(0);
+      if (res && 0x3c > res || res > 0x3f) {
+        throw new Error('prefix must be in range 0x3c .. 0x3f');
+      }
+    }
+    if (id.intermediates) {
+      if (id.intermediates.length > 2) {
+        throw new Error('only two bytes as intermediates are supported');
+      }
+      for (let i = 0; i < id.intermediates.length; ++i) {
+        const intermediate = id.intermediates.charCodeAt(i);
+        if (0x20 > intermediate || intermediate > 0x2f) {
+          throw new Error('intermediate must be in range 0x20 .. 0x2f');
+        }
+        res <<= 8;
+        res |= intermediate;
+      }
+    }
+    if (id.final.length !== 1) {
+      throw new Error('final must be a single byte');
+    }
+    const finalCode = id.final.charCodeAt(0);
+    if (finalRange[0] > finalCode || finalCode > finalRange[1]) {
+      throw new Error(`final must be in range ${finalRange[0]} .. ${finalRange[1]}`);
+    }
+    res <<= 8;
+    res |= finalCode;
+
+    return res;
+  }
+
+  public identToString(ident: number): string {
+    const res: string[] = [];
+    while (ident) {
+      res.push(String.fromCharCode(ident & 0xFF));
+      ident >>= 8;
+    }
+    return res.reverse().join('');
   }
 
   public dispose(): void {
-    this._executeHandlers = null;
-    this._escHandlers = null;
-    this._dcsHandlers = null;
-    this._activeDcsHandler = null;
+    this._csiHandlers = Object.create(null);
+    this._executeHandlers = Object.create(null);
+    this._escHandlers = Object.create(null);
+    this._oscParser.dispose();
+    this._dcsParser.dispose();
   }
 
-  setPrintHandler(callback: (data: Uint32Array, start: number, end: number) => void): void {
-    this._printHandler = callback;
+  public setPrintHandler(handler: PrintHandlerType): void {
+    this._printHandler = handler;
   }
-  clearPrintHandler(): void {
+  public clearPrintHandler(): void {
     this._printHandler = this._printHandlerFb;
   }
 
-  setExecuteHandler(flag: string, callback: () => void): void {
-    this._executeHandlers[flag.charCodeAt(0)] = callback;
-  }
-  clearExecuteHandler(flag: string): void {
-    if (this._executeHandlers[flag.charCodeAt(0)]) delete this._executeHandlers[flag.charCodeAt(0)];
-  }
-  setExecuteHandlerFallback(callback: (code: number) => void): void {
-    this._executeHandlerFb = callback;
-  }
-
-  addCsiHandler(flag: string, callback: CsiHandler): IDisposable {
-    const index = flag.charCodeAt(0);
-    if (this._csiHandlers[index] === undefined) {
-      this._csiHandlers[index] = [];
+  public addEscHandler(id: IFunctionIdentifier, handler: EscHandlerType): IDisposable {
+    const ident = this._identifier(id, [0x30, 0x7e]);
+    if (this._escHandlers[ident] === undefined) {
+      this._escHandlers[ident] = [];
     }
-    const handlerList = this._csiHandlers[index];
-    handlerList.push(callback);
+    const handlerList = this._escHandlers[ident];
+    handlerList.push(handler);
     return {
       dispose: () => {
-        const handlerIndex = handlerList.indexOf(callback);
+        const handlerIndex = handlerList.indexOf(handler);
         if (handlerIndex !== -1) {
           handlerList.splice(handlerIndex, 1);
         }
       }
     };
   }
-  setCsiHandler(flag: string, callback: (params: number[], collect: string) => void): void {
-    this._csiHandlers[flag.charCodeAt(0)] = [callback];
+  public setEscHandler(id: IFunctionIdentifier, handler: EscHandlerType): void {
+    this._escHandlers[this._identifier(id, [0x30, 0x7e])] = [handler];
   }
-  clearCsiHandler(flag: string): void {
-    if (this._csiHandlers[flag.charCodeAt(0)]) delete this._csiHandlers[flag.charCodeAt(0)];
+  public clearEscHandler(id: IFunctionIdentifier): void {
+    if (this._escHandlers[this._identifier(id, [0x30, 0x7e])]) delete this._escHandlers[this._identifier(id, [0x30, 0x7e])];
   }
-  setCsiHandlerFallback(callback: (collect: string, params: number[], flag: number) => void): void {
+  public setEscHandlerFallback(handler: EscFallbackHandlerType): void {
+    this._escHandlerFb = handler;
+  }
+
+  public setExecuteHandler(flag: string, handler: ExecuteHandlerType): void {
+    this._executeHandlers[flag.charCodeAt(0)] = handler;
+  }
+  public clearExecuteHandler(flag: string): void {
+    if (this._executeHandlers[flag.charCodeAt(0)]) delete this._executeHandlers[flag.charCodeAt(0)];
+  }
+  public setExecuteHandlerFallback(handler: ExecuteFallbackHandlerType): void {
+    this._executeHandlerFb = handler;
+  }
+
+  public addCsiHandler(id: IFunctionIdentifier, handler: CsiHandlerType): IDisposable {
+    const ident = this._identifier(id);
+    if (this._csiHandlers[ident] === undefined) {
+      this._csiHandlers[ident] = [];
+    }
+    const handlerList = this._csiHandlers[ident];
+    handlerList.push(handler);
+    return {
+      dispose: () => {
+        const handlerIndex = handlerList.indexOf(handler);
+        if (handlerIndex !== -1) {
+          handlerList.splice(handlerIndex, 1);
+        }
+      }
+    };
+  }
+  public setCsiHandler(id: IFunctionIdentifier, handler: CsiHandlerType): void {
+    this._csiHandlers[this._identifier(id)] = [handler];
+  }
+  public clearCsiHandler(id: IFunctionIdentifier): void {
+    if (this._csiHandlers[this._identifier(id)]) delete this._csiHandlers[this._identifier(id)];
+  }
+  public setCsiHandlerFallback(callback: (ident: number, params: IParams) => void): void {
     this._csiHandlerFb = callback;
   }
 
-  setEscHandler(collectAndFlag: string, callback: () => void): void {
-    this._escHandlers[collectAndFlag] = callback;
+  public addDcsHandler(id: IFunctionIdentifier, handler: IDcsHandler): IDisposable {
+    return this._dcsParser.addHandler(this._identifier(id), handler);
   }
-  clearEscHandler(collectAndFlag: string): void {
-    if (this._escHandlers[collectAndFlag]) delete this._escHandlers[collectAndFlag];
+  public setDcsHandler(id: IFunctionIdentifier, handler: IDcsHandler): void {
+    this._dcsParser.setHandler(this._identifier(id), handler);
   }
-  setEscHandlerFallback(callback: (collect: string, flag: number) => void): void {
-    this._escHandlerFb = callback;
+  public clearDcsHandler(id: IFunctionIdentifier): void {
+    this._dcsParser.clearHandler(this._identifier(id));
   }
-
-  addOscHandler(ident: number, callback: (data: string) => boolean): IDisposable {
-    if (this._oscHandlers[ident] === undefined) {
-      this._oscHandlers[ident] = [];
-    }
-    const handlerList = this._oscHandlers[ident];
-    handlerList.push(callback);
-    return {
-      dispose: () => {
-        const handlerIndex = handlerList.indexOf(callback);
-        if (handlerIndex !== -1) {
-          handlerList.splice(handlerIndex, 1);
-        }
-      }
-    };
-  }
-  setOscHandler(ident: number, callback: (data: string) => void): void {
-    this._oscHandlers[ident] = [callback];
-  }
-  clearOscHandler(ident: number): void {
-    if (this._oscHandlers[ident]) delete this._oscHandlers[ident];
-  }
-  setOscHandlerFallback(callback: (identifier: number, data: string) => void): void {
-    this._oscHandlerFb = callback;
+  public setDcsHandlerFallback(handler: DcsFallbackHandlerType): void {
+    this._dcsParser.setHandlerFallback(handler);
   }
 
-  setDcsHandler(collectAndFlag: string, handler: IDcsHandler): void {
-    this._dcsHandlers[collectAndFlag] = handler;
+  public addOscHandler(ident: number, handler: IOscHandler): IDisposable {
+    return this._oscParser.addHandler(ident, handler);
   }
-  clearDcsHandler(collectAndFlag: string): void {
-    if (this._dcsHandlers[collectAndFlag]) delete this._dcsHandlers[collectAndFlag];
+  public setOscHandler(ident: number, handler: IOscHandler): void {
+    this._oscParser.setHandler(ident, handler);
   }
-  setDcsHandlerFallback(handler: IDcsHandler): void {
-    this._dcsHandlerFb = handler;
+  public clearOscHandler(ident: number): void {
+    this._oscParser.clearHandler(ident);
+  }
+  public setOscHandlerFallback(handler: OscFallbackHandlerType): void {
+    this._oscParser.setHandlerFallback(handler);
   }
 
-  setErrorHandler(callback: (state: IParsingState) => IParsingState): void {
+  public setErrorHandler(callback: (state: IParsingState) => IParsingState): void {
     this._errorHandler = callback;
   }
-  clearErrorHandler(): void {
+  public clearErrorHandler(): void {
     this._errorHandler = this._errorHandlerFb;
   }
 
-  reset(): void {
+  public reset(): void {
     this.currentState = this.initialState;
-    this._osc = '';
-    this._params = [0];
-    this._collect = '';
-    this._activeDcsHandler = null;
+    this._oscParser.reset();
+    this._dcsParser.reset();
+    this._params.reset();
+    this._params.addParam(0); // ZDM
+    this._collect = 0;
     this.precedingCodepoint = 0;
   }
 
+
+
   /**
    * Parse UTF32 codepoints in `data` up to `length`.
+   *
    * Note: For several actions with high data load the parsing is optimized
    * by using local read ahead loops with hardcoded conditions to
    * avoid costly table lookups. Make sure that any change of table values
-   * will be reflected in the loop conditions as well. Affected states/actions:
+   * will be reflected in the loop conditions as well and vice versa.
+   * Affected states/actions:
    * - GROUND:PRINT
    * - CSI_PARAM:PARAM
    * - DCS_PARAM:PARAM
    * - OSC_STRING:OSC_PUT
    * - DCS_PASSTHROUGH:DCS_PUT
    */
-  parse(data: Uint32Array, length: number): void {
+  public parse(data: Uint32Array, length: number): void {
     let code = 0;
     let transition = 0;
     let currentState = this.currentState;
-    let osc = this._osc;
+    const osc = this._oscParser;
+    const dcs = this._dcsParser;
     let collect = this._collect;
-    let params = this._params;
-    const table: Uint8Array = this.TRANSITIONS.table;
-    let dcsHandler: IDcsHandler | null = this._activeDcsHandler;
-    let callback: Function | null = null;
+    const params = this._params;
+    const table: Uint8Array = this._transitions.table;
 
     // process input string
     for (let i = 0; i < length; ++i) {
@@ -456,10 +509,9 @@ export class EscapeSequenceParser extends Disposable implements IEscapeSequenceP
           }
           break;
         case ParserAction.EXECUTE:
-          this.precedingCodepoint = 0;
-          callback = this._executeHandlers[code];
-          if (callback) callback();
+          if (this._executeHandlers[code]) this._executeHandlers[code]();
           else this._executeHandlerFb(code);
+          this.precedingCodepoint = 0;
           break;
         case ParserAction.IGNORE:
           break;
@@ -469,7 +521,6 @@ export class EscapeSequenceParser extends Disposable implements IEscapeSequenceP
               position: i,
               code,
               currentState,
-              osc,
               collect,
               params,
               abort: false
@@ -478,131 +529,108 @@ export class EscapeSequenceParser extends Disposable implements IEscapeSequenceP
           // inject values: currently not implemented
           break;
         case ParserAction.CSI_DISPATCH:
-          // dont reset preceding codepoint for REP itself
-          if (code !== 98) { // 'b'
-            this.precedingCodepoint = 0;
-          }
           // Trigger CSI Handler
-          const handlers = this._csiHandlers[code];
+          const handlers = this._csiHandlers[collect << 8 | code];
           let j = handlers ? handlers.length - 1 : -1;
           for (; j >= 0; j--) {
             // undefined or true means success and to stop bubbling
-            if (handlers[j](params, collect) !== false) {
+            if (handlers[j](params) !== false) {
               break;
             }
           }
           if (j < 0) {
-            this._csiHandlerFb(collect, params, code);
+            this._csiHandlerFb(collect << 8 | code, params);
           }
+          this.precedingCodepoint = 0;
           break;
         case ParserAction.PARAM:
-          // inner loop: digits (0x30 - 0x39) and ; (0x3b)
+          // inner loop: digits (0x30 - 0x39) and ; (0x3b) and : (0x3a)
           do {
-            if (code === 0x3b) params.push(0);
-            else params[params.length - 1] = params[params.length - 1] * 10 + code - 48;
-          } while (++i < length && (code = data[i]) > 0x2f && (code < 0x3a || code === 0x3b));
+            switch (code) {
+              case 0x3b:
+                params.addParam(0);  // ZDM
+                break;
+              case 0x3a:
+                params.addSubParam(-1);
+                break;
+              default:  // 0x30 - 0x39
+                params.addDigit(code - 48);
+            }
+          } while (++i < length && (code = data[i]) > 0x2f && code < 0x3c);
           i--;
           break;
         case ParserAction.COLLECT:
-          collect += String.fromCharCode(code);
+          collect <<= 8;
+          collect |= code;
           break;
         case ParserAction.ESC_DISPATCH:
+          const handlersEsc = this._escHandlers[collect << 8 | code];
+          let jj = handlersEsc ? handlersEsc.length - 1 : -1;
+          for (; jj >= 0; jj--) {
+            // undefined or true means success and to stop bubbling
+            if (handlersEsc[jj]() !== false) {
+              break;
+            }
+          }
+          if (jj < 0) {
+            this._escHandlerFb(collect << 8 | code);
+          }
           this.precedingCodepoint = 0;
-          callback = this._escHandlers[collect + String.fromCharCode(code)];
-          if (callback) callback(collect, code);
-          else this._escHandlerFb(collect, code);
           break;
         case ParserAction.CLEAR:
-          osc = '';
-          params = [0];
-          collect = '';
+          params.reset();
+          params.addParam(0); // ZDM
+          collect = 0;
           break;
         case ParserAction.DCS_HOOK:
-          this.precedingCodepoint = 0;
-          dcsHandler = this._dcsHandlers[collect + String.fromCharCode(code)];
-          if (!dcsHandler) dcsHandler = this._dcsHandlerFb;
-          dcsHandler.hook(collect, params, code);
+          dcs.hook(collect << 8 | code, params);
           break;
         case ParserAction.DCS_PUT:
           // inner loop - exit DCS_PUT: 0x18, 0x1a, 0x1b, 0x7f, 0x80 - 0x9f
-          // unhook triggered by: 0x1b, 0x9c
+          // unhook triggered by: 0x1b, 0x9c (success) and 0x18, 0x1a (abort)
           for (let j = i + 1; ; ++j) {
             if (j >= length || (code = data[j]) === 0x18 || code === 0x1a || code === 0x1b || (code > 0x7f && code < NON_ASCII_PRINTABLE)) {
-              if (dcsHandler) {
-                dcsHandler.put(data, i, j);
-              }
+              dcs.put(data, i, j);
               i = j - 1;
               break;
             }
           }
           break;
         case ParserAction.DCS_UNHOOK:
-          if (dcsHandler) {
-            dcsHandler.unhook();
-            dcsHandler = null;
-          }
+          dcs.unhook(code !== 0x18 && code !== 0x1a);
           if (code === 0x1b) transition |= ParserState.ESCAPE;
-          osc = '';
-          params = [0];
-          collect = '';
+          params.reset();
+          params.addParam(0); // ZDM
+          collect = 0;
+          this.precedingCodepoint = 0;
           break;
         case ParserAction.OSC_START:
-          osc = '';
+          osc.start();
           break;
         case ParserAction.OSC_PUT:
           // inner loop: 0x20 (SP) included, 0x7F (DEL) included
           for (let j = i + 1; ; j++) {
             if (j >= length || (code = data[j]) < 0x20 || (code > 0x7f && code <= 0x9f)) {
-              osc += utf32ToString(data, i, j);
+              osc.put(data, i, j);
               i = j - 1;
               break;
             }
           }
           break;
         case ParserAction.OSC_END:
-          this.precedingCodepoint = 0;
-          if (osc && code !== 0x18 && code !== 0x1a) {
-            // NOTE: OSC subparsing is not part of the original parser
-            // we do basic identifier parsing here to offer a jump table for OSC as well
-            const idx = osc.indexOf(';');
-            if (idx === -1) {
-              this._oscHandlerFb(-1, osc);  // this is an error (malformed OSC)
-            } else {
-              // Note: NaN is not handled here
-              // either catch it with the fallback handler
-              // or with an explicit NaN OSC handler
-              const identifier = parseInt(osc.substring(0, idx));
-              const content = osc.substring(idx + 1);
-              // Trigger OSC Handler
-              const handlers = this._oscHandlers[identifier];
-              let j = handlers ? handlers.length - 1 : -1;
-              for (; j >= 0; j--) {
-                // undefined or true means success and to stop bubbling
-                if (handlers[j](content) !== false) {
-                  break;
-                }
-              }
-              if (j < 0) {
-                this._oscHandlerFb(identifier, content);
-              }
-            }
-          }
+          osc.end(code !== 0x18 && code !== 0x1a);
           if (code === 0x1b) transition |= ParserState.ESCAPE;
-          osc = '';
-          params = [0];
-          collect = '';
+          params.reset();
+          params.addParam(0); // ZDM
+          collect = 0;
+          this.precedingCodepoint = 0;
           break;
       }
       currentState = transition & TableAccess.TRANSITION_STATE_MASK;
     }
 
-    // save non pushable buffers
-    this._osc = osc;
+    // save collected intermediates
     this._collect = collect;
-    this._params = params;
-
-    // save active dcs handler reference
-    this._activeDcsHandler = dcsHandler;
 
     // save state
     this.currentState = currentState;

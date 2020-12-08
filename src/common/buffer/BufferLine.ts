@@ -2,33 +2,12 @@
  * Copyright (c) 2018 The xterm.js authors. All rights reserved.
  * @license MIT
  */
-import { DEFAULT_COLOR, CharData, IBufferLine, ICellData, IColorRGB, IAttributeData } from 'common/Types';
+
+import { CharData, IBufferLine, ICellData, IAttributeData, IExtendedAttrs } from 'common/Types';
 import { stringFromCodePoint } from 'common/input/TextDecoder';
-
-export const DEFAULT_ATTR = (0 << 18) | (DEFAULT_COLOR << 9) | (256 << 0);
-
-export const CHAR_DATA_ATTR_INDEX = 0;
-export const CHAR_DATA_CHAR_INDEX = 1;
-export const CHAR_DATA_WIDTH_INDEX = 2;
-export const CHAR_DATA_CODE_INDEX = 3;
-
-/**
- * Null cell - a real empty cell (containing nothing).
- * Note that code should always be 0 for a null cell as
- * several test condition of the buffer line rely on this.
- */
-export const NULL_CELL_CHAR = '';
-export const NULL_CELL_WIDTH = 1;
-export const NULL_CELL_CODE = 0;
-
-/**
- * Whitespace cell.
- * This is meant as a replacement for empty cells when needed
- * during rendering lines to preserve correct aligment.
- */
-export const WHITESPACE_CELL_CHAR = ' ';
-export const WHITESPACE_CELL_WIDTH = 1;
-export const WHITESPACE_CELL_CODE = 32;
+import { CHAR_DATA_CHAR_INDEX, CHAR_DATA_WIDTH_INDEX, CHAR_DATA_ATTR_INDEX, NULL_CELL_CHAR, NULL_CELL_WIDTH, NULL_CELL_CODE, WHITESPACE_CELL_CHAR, Content, BgFlags } from 'common/buffer/Constants';
+import { CellData } from 'common/buffer/CellData';
+import { AttributeData, ExtendedAttrs } from 'common/buffer/AttributeData';
 
 /**
  * buffer memory layout:
@@ -56,257 +35,7 @@ const enum Cell {
   BG = 2  // currently unused
 }
 
-/**
- * Bitmasks for accessing data in `content`.
- */
-export const enum Content {
-  /**
-   * bit 1..21    codepoint, max allowed in UTF32 is 0x10FFFF (21 bits taken)
-   *              read:   `codepoint = content & Content.codepointMask;`
-   *              write:  `content |= codepoint & Content.codepointMask;`
-   *                      shortcut if precondition `codepoint <= 0x10FFFF` is met:
-   *                      `content |= codepoint;`
-   */
-  CODEPOINT_MASK = 0x1FFFFF,
-
-  /**
-   * bit 22       flag indication whether a cell contains combined content
-   *              read:   `isCombined = content & Content.isCombined;`
-   *              set:    `content |= Content.isCombined;`
-   *              clear:  `content &= ~Content.isCombined;`
-   */
-  IS_COMBINED_MASK = 0x200000,  // 1 << 21
-
-  /**
-   * bit 1..22    mask to check whether a cell contains any string data
-   *              we need to check for codepoint and isCombined bits to see
-   *              whether a cell contains anything
-   *              read:   `isEmpty = !(content & Content.hasContent)`
-   */
-  HAS_CONTENT_MASK = 0x3FFFFF,
-
-  /**
-   * bit 23..24   wcwidth value of cell, takes 2 bits (ranges from 0..2)
-   *              read:   `width = (content & Content.widthMask) >> Content.widthShift;`
-   *                      `hasWidth = content & Content.widthMask;`
-   *                      as long as wcwidth is highest value in `content`:
-   *                      `width = content >> Content.widthShift;`
-   *              write:  `content |= (width << Content.widthShift) & Content.widthMask;`
-   *                      shortcut if precondition `0 <= width <= 3` is met:
-   *                      `content |= width << Content.widthShift;`
-   */
-  WIDTH_MASK = 0xC00000,   // 3 << 22
-  WIDTH_SHIFT = 22
-}
-
-
-export const enum Attributes {
-  /**
-   * bit 1..8     blue in RGB, color in P256 and P16
-   */
-  BLUE_MASK = 0xFF,
-  BLUE_SHIFT = 0,
-  PCOLOR_MASK = 0xFF,
-  PCOLOR_SHIFT = 0,
-
-  /**
-   * bit 9..16    green in RGB
-   */
-  GREEN_MASK = 0xFF00,
-  GREEN_SHIFT = 8,
-
-  /**
-   * bit 17..24   red in RGB
-   */
-  RED_MASK = 0xFF0000,
-  RED_SHIFT = 16,
-
-  /**
-   * bit 25..26   color mode: DEFAULT (0) | P16 (1) | P256 (2) | RGB (3)
-   */
-  CM_MASK = 0x3000000,
-  CM_DEFAULT = 0,
-  CM_P16 = 0x1000000,
-  CM_P256 = 0x2000000,
-  CM_RGB = 0x3000000,
-
-  /**
-   * bit 1..24  RGB room
-   */
-  RGB_MASK = 0xFFFFFF
-}
-
-export const enum FgFlags {
-  /**
-   * bit 27..31 (32th bit unused)
-   */
-  INVERSE = 0x4000000,
-  BOLD = 0x8000000,
-  UNDERLINE = 0x10000000,
-  BLINK = 0x20000000,
-  INVISIBLE = 0x40000000
-}
-
-export const enum BgFlags {
-  /**
-   * bit 27..32 (upper 4 unused)
-   */
-  ITALIC = 0x4000000,
-  DIM = 0x8000000
-}
-
-export class AttributeData implements IAttributeData {
-  static toColorRGB(value: number): IColorRGB {
-    return [
-      value >>> Attributes.RED_SHIFT & 255,
-      value >>> Attributes.GREEN_SHIFT & 255,
-      value & 255
-    ];
-  }
-  static fromColorRGB(value: IColorRGB): number {
-    return (value[0] & 255) << Attributes.RED_SHIFT | (value[1] & 255) << Attributes.GREEN_SHIFT | value[2] & 255;
-  }
-
-  public clone(): IAttributeData {
-    const newObj = new AttributeData();
-    newObj.fg = this.fg;
-    newObj.bg = this.bg;
-    return newObj;
-  }
-
-  // data
-  public fg: number = 0;
-  public bg: number = 0;
-
-  // flags
-  public isInverse(): number   { return this.fg & FgFlags.INVERSE; }
-  public isBold(): number      { return this.fg & FgFlags.BOLD; }
-  public isUnderline(): number { return this.fg & FgFlags.UNDERLINE; }
-  public isBlink(): number     { return this.fg & FgFlags.BLINK; }
-  public isInvisible(): number { return this.fg & FgFlags.INVISIBLE; }
-  public isItalic(): number    { return this.bg & BgFlags.ITALIC; }
-  public isDim(): number       { return this.bg & BgFlags.DIM; }
-
-  // color modes
-  public getFgColorMode(): number { return this.fg & Attributes.CM_MASK; }
-  public getBgColorMode(): number { return this.bg & Attributes.CM_MASK; }
-  public isFgRGB(): boolean       { return (this.fg & Attributes.CM_MASK) === Attributes.CM_RGB; }
-  public isBgRGB(): boolean       { return (this.bg & Attributes.CM_MASK) === Attributes.CM_RGB; }
-  public isFgPalette(): boolean   { return (this.fg & Attributes.CM_MASK) === Attributes.CM_P16 || (this.fg & Attributes.CM_MASK) === Attributes.CM_P256; }
-  public isBgPalette(): boolean   { return (this.bg & Attributes.CM_MASK) === Attributes.CM_P16 || (this.bg & Attributes.CM_MASK) === Attributes.CM_P256; }
-  public isFgDefault(): boolean   { return (this.fg & Attributes.CM_MASK) === 0; }
-  public isBgDefault(): boolean   { return (this.bg & Attributes.CM_MASK) === 0; }
-
-  // colors
-  public getFgColor(): number {
-    switch (this.fg & Attributes.CM_MASK) {
-      case Attributes.CM_P16:
-      case Attributes.CM_P256:  return this.fg & Attributes.PCOLOR_MASK;
-      case Attributes.CM_RGB:   return this.fg & Attributes.RGB_MASK;
-      default:                  return -1;  // CM_DEFAULT defaults to -1
-    }
-  }
-  public getBgColor(): number {
-    switch (this.bg & Attributes.CM_MASK) {
-      case Attributes.CM_P16:
-      case Attributes.CM_P256:  return this.bg & Attributes.PCOLOR_MASK;
-      case Attributes.CM_RGB:   return this.bg & Attributes.RGB_MASK;
-      default:                  return -1;  // CM_DEFAULT defaults to -1
-    }
-  }
-}
-
 export const DEFAULT_ATTR_DATA = Object.freeze(new AttributeData());
-
-/**
- * CellData - represents a single Cell in the terminal buffer.
- */
-export class CellData extends AttributeData implements ICellData {
-
-  /** Helper to create CellData from CharData. */
-  public static fromCharData(value: CharData): CellData {
-    const obj = new CellData();
-    obj.setFromCharData(value);
-    return obj;
-  }
-
-  /** Primitives from terminal buffer. */
-  public content: number = 0;
-  public fg: number = 0;
-  public bg: number = 0;
-  public combinedData: string = '';
-
-  /** Whether cell contains a combined string. */
-  public isCombined(): number {
-    return this.content & Content.IS_COMBINED_MASK;
-  }
-
-  /** Width of the cell. */
-  public getWidth(): number {
-    return this.content >> Content.WIDTH_SHIFT;
-  }
-
-  /** JS string of the content. */
-  public getChars(): string {
-    if (this.content & Content.IS_COMBINED_MASK) {
-      return this.combinedData;
-    }
-    if (this.content & Content.CODEPOINT_MASK) {
-      return stringFromCodePoint(this.content & Content.CODEPOINT_MASK);
-    }
-    return '';
-  }
-
-  /**
-   * Codepoint of cell
-   * Note this returns the UTF32 codepoint of single chars,
-   * if content is a combined string it returns the codepoint
-   * of the last char in string to be in line with code in CharData.
-   * */
-  public getCode(): number {
-    return (this.isCombined())
-      ? this.combinedData.charCodeAt(this.combinedData.length - 1)
-      : this.content & Content.CODEPOINT_MASK;
-  }
-
-  /** Set data from CharData */
-  public setFromCharData(value: CharData): void {
-    this.fg = value[CHAR_DATA_ATTR_INDEX];
-    this.bg = 0;
-    let combined = false;
-
-    // surrogates and combined strings need special treatment
-    if (value[CHAR_DATA_CHAR_INDEX].length > 2) {
-      combined = true;
-    } else if (value[CHAR_DATA_CHAR_INDEX].length === 2) {
-      const code = value[CHAR_DATA_CHAR_INDEX].charCodeAt(0);
-      // if the 2-char string is a surrogate create single codepoint
-      // everything else is combined
-      if (0xD800 <= code && code <= 0xDBFF) {
-        const second = value[CHAR_DATA_CHAR_INDEX].charCodeAt(1);
-        if (0xDC00 <= second && second <= 0xDFFF) {
-          this.content = ((code - 0xD800) * 0x400 + second - 0xDC00 + 0x10000) | (value[CHAR_DATA_WIDTH_INDEX] << Content.WIDTH_SHIFT);
-        } else {
-          combined = true;
-        }
-      } else {
-        combined = true;
-      }
-    } else {
-      this.content = value[CHAR_DATA_CHAR_INDEX].charCodeAt(0) | (value[CHAR_DATA_WIDTH_INDEX] << Content.WIDTH_SHIFT);
-    }
-    if (combined) {
-      this.combinedData = value[CHAR_DATA_CHAR_INDEX];
-      this.content = Content.IS_COMBINED_MASK | (value[CHAR_DATA_WIDTH_INDEX] << Content.WIDTH_SHIFT);
-    }
-  }
-
-  /** Get data as CharData. */
-  public getAsCharData(): CharData {
-    return [this.fg, this.getChars(), this.getWidth(), this.getCode()];
-  }
-}
-
 
 /**
  * Typed array based bufferline implementation.
@@ -326,6 +55,7 @@ export class CellData extends AttributeData implements ICellData {
 export class BufferLine implements IBufferLine {
   protected _data: Uint32Array;
   protected _combined: {[index: number]: string} = {};
+  protected _extendedAttrs: {[index: number]: ExtendedAttrs} = {};
   public length: number;
 
   constructor(cols: number, fillCellData?: ICellData, public isWrapped: boolean = false) {
@@ -445,6 +175,9 @@ export class BufferLine implements IBufferLine {
     if (cell.content & Content.IS_COMBINED_MASK) {
       cell.combinedData = this._combined[index];
     }
+    if (cell.bg & BgFlags.HAS_EXTENDED) {
+      cell.extended = this._extendedAttrs[index];
+    }
     return cell;
   }
 
@@ -454,6 +187,9 @@ export class BufferLine implements IBufferLine {
   public setCell(index: number, cell: ICellData): void {
     if (cell.content & Content.IS_COMBINED_MASK) {
       this._combined[index] = cell.combinedData;
+    }
+    if (cell.bg & BgFlags.HAS_EXTENDED) {
+      this._extendedAttrs[index] = cell.extended;
     }
     this._data[index * CELL_SIZE + Cell.CONTENT] = cell.content;
     this._data[index * CELL_SIZE + Cell.FG] = cell.fg;
@@ -465,7 +201,10 @@ export class BufferLine implements IBufferLine {
    * Since the input handler see the incoming chars as UTF32 codepoints,
    * it gets an optimized access method.
    */
-  public setCellFromCodePoint(index: number, codePoint: number, width: number, fg: number, bg: number): void {
+  public setCellFromCodePoint(index: number, codePoint: number, width: number, fg: number, bg: number, eAttrs: IExtendedAttrs): void {
+    if (bg & BgFlags.HAS_EXTENDED) {
+      this._extendedAttrs[index] = eAttrs;
+    }
     this._data[index * CELL_SIZE + Cell.CONTENT] = codePoint | (width << Content.WIDTH_SHIFT);
     this._data[index * CELL_SIZE + Cell.FG] = fg;
     this._data[index * CELL_SIZE + Cell.BG] = bg;
@@ -499,8 +238,14 @@ export class BufferLine implements IBufferLine {
     }
   }
 
-  public insertCells(pos: number, n: number, fillCellData: ICellData): void {
+  public insertCells(pos: number, n: number, fillCellData: ICellData, eraseAttr?: IAttributeData): void {
     pos %= this.length;
+
+    // handle fullwidth at pos: reset cell one to the left if pos is second cell of a wide char
+    if (pos && this.getWidth(pos - 1) === 2) {
+      this.setCellFromCodePoint(pos - 1, 0, 1, eraseAttr?.fg || 0, eraseAttr?.bg || 0, eraseAttr?.extended || new ExtendedAttrs());
+    }
+
     if (n < this.length - pos) {
       const cell = new CellData();
       for (let i = this.length - pos - n - 1; i >= 0; --i) {
@@ -514,9 +259,14 @@ export class BufferLine implements IBufferLine {
         this.setCell(i, fillCellData);
       }
     }
+
+    // handle fullwidth at line end: reset last cell if it is first cell of a wide char
+    if (this.getWidth(this.length - 1) === 2) {
+      this.setCellFromCodePoint(this.length - 1, 0, 1, eraseAttr?.fg || 0, eraseAttr?.bg || 0, eraseAttr?.extended || new ExtendedAttrs());
+    }
   }
 
-  public deleteCells(pos: number, n: number, fillCellData: ICellData): void {
+  public deleteCells(pos: number, n: number, fillCellData: ICellData, eraseAttr?: IAttributeData): void {
     pos %= this.length;
     if (n < this.length - pos) {
       const cell = new CellData();
@@ -531,9 +281,28 @@ export class BufferLine implements IBufferLine {
         this.setCell(i, fillCellData);
       }
     }
+
+    // handle fullwidth at pos:
+    // - reset pos-1 if wide char
+    // - reset pos if width==0 (previous second cell of a wide char)
+    if (pos && this.getWidth(pos - 1) === 2) {
+      this.setCellFromCodePoint(pos - 1, 0, 1, eraseAttr?.fg || 0, eraseAttr?.bg || 0, eraseAttr?.extended || new ExtendedAttrs());
+    }
+    if (this.getWidth(pos) === 0 && !this.hasContent(pos)) {
+      this.setCellFromCodePoint(pos, 0, 1, eraseAttr?.fg || 0, eraseAttr?.bg || 0, eraseAttr?.extended || new ExtendedAttrs());
+    }
   }
 
-  public replaceCells(start: number, end: number, fillCellData: ICellData): void {
+  public replaceCells(start: number, end: number, fillCellData: ICellData, eraseAttr?: IAttributeData): void {
+    // handle fullwidth at start: reset cell one to the left if start is second cell of a wide char
+    if (start && this.getWidth(start - 1) === 2) {
+      this.setCellFromCodePoint(start - 1, 0, 1, eraseAttr?.fg || 0, eraseAttr?.bg || 0, eraseAttr?.extended || new ExtendedAttrs());
+    }
+    // handle fullwidth at last cell + 1: reset to empty cell if it is second part of a wide char
+    if (end < this.length && this.getWidth(end - 1) === 2) {
+      this.setCellFromCodePoint(end, 0, 1, eraseAttr?.fg || 0, eraseAttr?.bg || 0, eraseAttr?.extended || new ExtendedAttrs());
+    }
+
     while (start < end  && start < this.length) {
       this.setCell(start++, fillCellData);
     }
@@ -561,7 +330,7 @@ export class BufferLine implements IBufferLine {
         const data = new Uint32Array(cols * CELL_SIZE);
         data.set(this._data.subarray(0, cols * CELL_SIZE));
         this._data = data;
-        // Remove any cut off combined data
+        // Remove any cut off combined data, FIXME: repeat this for extended attrs
         const keys = Object.keys(this._combined);
         for (let i = 0; i < keys.length; i++) {
           const key = parseInt(keys[i], 10);
@@ -580,6 +349,7 @@ export class BufferLine implements IBufferLine {
   /** fill a line with fillCharData */
   public fill(fillCellData: ICellData): void {
     this._combined = {};
+    this._extendedAttrs = {};
     for (let i = 0; i < this.length; ++i) {
       this.setCell(i, fillCellData);
     }
@@ -598,6 +368,10 @@ export class BufferLine implements IBufferLine {
     for (const el in line._combined) {
       this._combined[el] = line._combined[el];
     }
+    this._extendedAttrs = {};
+    for (const el in line._extendedAttrs) {
+      this._extendedAttrs[el] = line._extendedAttrs[el];
+    }
     this.isWrapped = line.isWrapped;
   }
 
@@ -608,6 +382,9 @@ export class BufferLine implements IBufferLine {
     newLine.length = this.length;
     for (const el in this._combined) {
       newLine._combined[el] = this._combined[el];
+    }
+    for (const el in this._extendedAttrs) {
+      newLine._extendedAttrs[el] = this._extendedAttrs[el];
     }
     newLine.isWrapped = this.isWrapped;
     return newLine;
@@ -638,7 +415,7 @@ export class BufferLine implements IBufferLine {
       }
     }
 
-    // Move any combined data over as needed
+    // Move any combined data over as needed, FIXME: repeat for extended attrs
     const srcCombinedKeys = Object.keys(src._combined);
     for (let i = 0; i < srcCombinedKeys.length; i++) {
       const key = parseInt(srcCombinedKeys[i], 10);
